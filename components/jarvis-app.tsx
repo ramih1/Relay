@@ -12,8 +12,10 @@ import {
   ChevronRight,
   ClipboardList,
   Clock3,
+  Palette,
   Home,
   Mail,
+  MoonStar,
   PhoneCall,
   Search,
   Send,
@@ -23,7 +25,7 @@ import {
   SunMedium,
   Trash2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { initialNotifications } from "@/lib/data";
 import type { EmailDraft, NavKey, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
 import { useJarvis } from "@/components/jarvis-provider";
@@ -65,6 +67,14 @@ const mobileNavItems = navItems.slice(0, 5);
 
 const confirmationTabs = ["pending", "approved", "cancelled"] as const;
 type ConfirmationTab = (typeof confirmationTabs)[number];
+const themeOptions = [
+  { key: "carbon", label: "Carbon", accent: "#56d3d0" },
+  { key: "light", label: "Light", accent: "#0f766e" },
+  { key: "dawn", label: "Dawn", accent: "#b45309" },
+  { key: "ocean", label: "Ocean", accent: "#38bdf8" },
+] as const;
+type ThemeName = (typeof themeOptions)[number]["key"];
+const THEME_STORAGE_KEY = "jarvis-theme-v1";
 
 export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const {
@@ -106,6 +116,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const [selectedNoteId, setSelectedNoteId] = useState<string>(notes[0]?.id ?? "");
   const [selectedDraftId, setSelectedDraftId] = useState<string>(drafts[0]?.id ?? "");
   const [confirmationTab, setConfirmationTab] = useState<ConfirmationTab>("pending");
+  const [theme, setTheme] = useState<ThemeName>("carbon");
 
   const pendingApprovals = pendingActions.filter((item) => item.status === "pending");
   const pendingCount = pendingApprovals.length;
@@ -261,6 +272,18 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     },
   ];
 
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY) as ThemeName | null;
+    if (storedTheme && themeOptions.some((option) => option.key === storedTheme)) {
+      setTheme(storedTheme);
+    }
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
   return (
     <main className="min-h-screen bg-bg pb-24 text-text lg:pb-0">
       <div className="relative overflow-hidden">
@@ -269,7 +292,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
           <div className="jarvis-shell flex min-h-[calc(100vh-2rem)] flex-col overflow-hidden lg:flex-row">
             <aside className="flex w-full shrink-0 flex-col border-b border-white/6 px-5 py-6 lg:w-[276px] lg:border-b-0 lg:border-r lg:px-4">
               <div className="flex items-start justify-between">
-                <p className="font-display text-[3rem] tracking-[0.08em] text-[#e7cfab]">JARVIS</p>
+                <JarvisBrand />
                 <button type="button" className="icon-chip mt-2 hidden lg:inline-flex">
                   <ChevronRight className="h-4 w-4 rotate-180" />
                 </button>
@@ -280,21 +303,14 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                   <Link
                     key={key}
                     href={href}
-                    className={clsx(
-                      "flex w-full items-center justify-between rounded-[1.15rem] border px-4 py-3.5 text-left transition",
-                      section === key
-                        ? "border-[#56d3d0]/40 bg-[linear-gradient(90deg,rgba(86,211,208,0.14),rgba(255,255,255,0.02))] text-[#f7f0e2]"
-                        : "border-transparent text-[#d9dbd7] hover:border-white/8 hover:bg-white/[0.03] hover:text-[#f7f0e2]",
-                    )}
+                    className={clsx("nav-item", section === key && "active")}
                   >
                     <span className="flex items-center gap-3">
-                      <Icon className={clsx("h-4 w-4", section === key ? "text-[#f1d4a3]" : "text-[#b9b9b4]")} />
+                      <Icon className="nav-item-icon h-4 w-4" />
                       {label}
                     </span>
                     {key === "confirmations" && pendingCount > 0 ? (
-                      <span className="rounded-full border border-[#a07f43]/50 bg-[#241e16] px-2.5 py-0.5 text-xs font-semibold text-[#f0cf94]">
-                        {pendingCount}
-                      </span>
+                      <span className="queue-pill">{pendingCount}</span>
                     ) : null}
                   </Link>
                 ))}
@@ -305,16 +321,16 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                   <div className="flex items-center gap-3">
                     <div className="avatar-chip">RH</div>
                     <div>
-                      <p className="text-sm font-medium text-[#f5efe4]">Rami Hassan</p>
-                      <p className="text-sm text-[#56d3d0]">Pro Plan</p>
+                      <p className="title-main text-sm font-medium">Rami Hassan</p>
+                      <p className="accent-copy text-sm">Pro Plan</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="soft-card relative overflow-hidden p-4">
-                  <div className="absolute left-4 top-5 h-14 w-14 rounded-full border border-[#56d3d0]/25 bg-[radial-gradient(circle,_rgba(86,211,208,0.25),_transparent_58%)] blur-[2px]" />
+                  <div className="accent-orb absolute left-4 top-5 h-14 w-14 rounded-full border border-[color:color-mix(in_srgb,var(--accent)_32%,transparent_68%)] blur-[2px]" />
                   <div className="relative pl-16">
-                    <p className="text-lg text-[#eae5db]">JARVIS Online</p>
+                    <p className="title-soft text-lg">JARVIS Online</p>
                     <p className="mt-1 text-sm text-muted">Synced across pages.</p>
                   </div>
                 </div>
@@ -323,6 +339,22 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
             <section className="flex flex-1 flex-col px-5 py-5 lg:px-6">
               <TopCommandBar command={command} setCommand={setCommand} submitCommand={handleSubmitCommand} />
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="theme-toggle-shell flex items-center gap-2">
+                  {themeOptions.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => setTheme(option.key)}
+                      className={clsx("theme-pill", theme === option.key && "active")}
+                    >
+                      <span className="theme-swatch" style={{ backgroundColor: option.accent }} />
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-sm text-muted">Theme controls are live across the app and saved locally.</p>
+              </div>
 
               {section === "dashboard" ? (
                 <>
@@ -331,10 +363,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <p className="eyebrow">Today Brief</p>
-                          <h1 className="mt-5 font-display text-[3rem] leading-[1.02] text-[#ead3af] sm:text-[4rem]">
+                          <h1 className="title-hero mt-5 font-display text-[3rem] leading-[1.02] sm:text-[4rem]">
                             Good morning, Rami.
                           </h1>
-                          <p className="mt-4 max-w-[620px] text-xl leading-9 text-[#f0e9db]">{todayBrief}</p>
+                          <p className="copy-strong mt-4 max-w-[620px] text-xl leading-9">{todayBrief}</p>
                         </div>
                         <button type="button" className="soft-outline hidden lg:inline-flex">
                           Generate again
@@ -355,9 +387,9 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <StatChip icon={Mail} value={pendingDraftCount} label="Email Draft" tone="gold" />
                         <StatChip icon={PhoneCall} value={pendingCallCount} label="Call Request" tone="teal" />
                       </div>
-                      <div className="mt-5 rounded-[1.15rem] border border-white/8 bg-white/[0.03] px-4 py-4">
-                        <p className="text-sm uppercase tracking-[0.2em] text-[#56d3d0]">Focus suggestion</p>
-                        <p className="mt-2 text-sm leading-7 text-[#ebe1d4]">{briefFocus}</p>
+                      <div className="focus-block mt-5 px-4 py-4">
+                        <p className="accent-copy text-sm uppercase tracking-[0.2em]">Focus suggestion</p>
+                        <p className="copy-strong mt-2 text-sm leading-7">{briefFocus}</p>
                       </div>
                     </section>
 
@@ -376,7 +408,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                               <span className="h-3 w-3 rounded-full border border-white/90 bg-transparent" />
                               {index < scheduleItems.length - 1 ? <span className="mt-2 h-full w-px bg-white/10" /> : null}
                             </div>
-                            <div className="min-w-[78px] text-sm text-[#e3ddd0]">{item.time}</div>
+                            <div className="copy-strong min-w-[78px] text-sm">{item.time}</div>
                             <div className="flex-1">
                               <div className="flex items-center gap-3">
                                 <span
@@ -385,7 +417,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                                     item.tone === "teal" ? "bg-[#56d3d0]" : "bg-[#ddb26f]",
                                   )}
                                 />
-                                <p className="text-xl text-[#f5efe4]">{item.title}</p>
+                                <p className="title-main text-xl">{item.title}</p>
                               </div>
                               <p className="mt-1 text-sm text-muted">{item.detail}</p>
                             </div>
@@ -432,16 +464,16 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                     </DashboardPanel>
 
                     <DashboardPanel title="Call Assistant" actionLabel="View calls" href="/calls">
-                      <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-5">
+                      <div className="app-card p-5">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex items-center gap-4">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[radial-gradient(circle,_rgba(86,211,208,0.25),_rgba(86,211,208,0.08))] text-[#61ddd5]">
+                            <div className="accent-orb flex h-16 w-16 items-center justify-center rounded-full">
                               <PhoneCall className="h-7 w-7" />
                             </div>
                             <div>
                               <p className="text-sm text-muted">Pending Call Plan</p>
-                              <p className="mt-1 text-[2rem] leading-none text-[#f3ebde]">{calls[0]?.contactName ?? "Campus Gym"}</p>
-                              <p className="mt-2 text-sm text-[#ded7ca]">{calls[0]?.purpose ?? "Ask if basketball court is free tonight"}</p>
+                              <p className="title-main mt-1 text-[2rem] leading-none">{calls[0]?.contactName ?? "Campus Gym"}</p>
+                              <p className="copy-strong mt-2 text-sm">{calls[0]?.purpose ?? "Ask if basketball court is free tonight"}</p>
                             </div>
                           </div>
                           <StatusPill value="high" tone="danger" />
@@ -473,10 +505,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           <button
                             key={suggestion}
                             type="button"
-                            className="flex w-full items-center justify-between rounded-[1.1rem] border border-white/8 bg-white/[0.03] px-4 py-4 text-left transition hover:border-[#a07f43]/40"
+                            className="app-card flex w-full items-center justify-between px-4 py-4 text-left transition hover:border-[color:color-mix(in_srgb,var(--warn)_36%,transparent_64%)]"
                           >
-                            <span className="flex items-center gap-3 text-[#efe7da]">
-                              <Sparkles className="h-4 w-4 text-[#56d3d0]" />
+                            <span className="title-soft flex items-center gap-3">
+                              <Sparkles className="accent-copy h-4 w-4" />
                               <span>{suggestion}</span>
                             </span>
                             <ChevronRight className="h-4 w-4 text-muted" />
@@ -494,10 +526,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                             key={action.label}
                             href={action.href}
                             onClick={action.onClick}
-                            className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] px-4 py-4 transition hover:border-[#56d3d0]/30 hover:bg-[rgba(86,211,208,0.04)]"
+                            className="app-card px-4 py-4 transition hover:border-[color:color-mix(in_srgb,var(--accent)_30%,transparent_70%)] hover:bg-[color:color-mix(in_srgb,var(--accent)_6%,transparent_94%)]"
                           >
-                            <p className="text-lg text-[#f4ecdf]">{action.label}</p>
-                            <p className="mt-2 text-sm leading-6 text-[#d1cabb]">{action.detail}</p>
+                            <p className="title-main text-lg">{action.label}</p>
+                            <p className="copy-soft mt-2 text-sm leading-6">{action.detail}</p>
                           </Link>
                         ))}
                       </div>
@@ -523,7 +555,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                     </div>
                     <div className="grid gap-3 lg:grid-cols-2">
                       {assistantFeed.slice(0, 4).map((message) => (
-                        <div key={message} className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-[#e8e0d4]">
+                        <div key={message} className="app-card copy-strong p-4 text-sm leading-7">
                           {message}
                         </div>
                       ))}
@@ -557,7 +589,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       <MetricCard label="High priority" value={String(highPriorityTasks.length)} detail="Needs focus first" />
                       <MetricCard label="Overdue" value={String(overdueCount)} detail="Worth clearing today" />
                       <DashboardPanel title="Suggested Next Move">
-                        <p className="text-sm leading-7 text-[#e7dfd1]">
+                        <p className="copy-strong text-sm leading-7">
                           Convert the research note into approved tasks, then block time after your 3 PM meeting to finish the outline.
                         </p>
                       </DashboardPanel>
@@ -610,13 +642,13 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       {notes.length > 0 ? (
                         <div className="space-y-3">
                           {notes.map((note) => (
-                            <div key={note.id} className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-4">
+                            <div key={note.id} className="app-card p-4">
                               <button type="button" onClick={() => setSelectedNoteId(note.id)} className="w-full text-left">
                                 <div className="flex items-center justify-between gap-3">
-                                  <p className="text-lg text-[#f7efe3]">{note.title}</p>
-                                  <span className="text-xs uppercase tracking-[0.2em] text-[#56d3d0]">{note.tags[0]}</span>
+                                  <p className="title-main text-lg">{note.title}</p>
+                                  <span className="accent-copy text-xs uppercase tracking-[0.2em]">{note.tags[0]}</span>
                                 </div>
-                                <p className="mt-2 text-sm leading-7 text-[#d8d2c7]">{note.summary}</p>
+                                <p className="copy-soft mt-2 text-sm leading-7">{note.summary}</p>
                               </button>
                               <div className="mt-3 flex justify-end">
                                 <button type="button" className="small-action" onClick={() => deleteNote(note.id)}>
@@ -638,12 +670,12 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <div className="space-y-5">
                           <div className="flex flex-wrap gap-2">
                             {notesPreview.tags.map((tag) => (
-                              <span key={tag} className="rounded-full border border-white/8 px-3 py-1 text-sm text-[#efe6d7]">
+                              <span key={tag} className="rounded-full border border-[color:color-mix(in_srgb,var(--surface-outline)_55%,transparent_45%)] px-3 py-1 text-sm title-soft">
                                 {tag}
                               </span>
                             ))}
                           </div>
-                          <p className="rounded-[1.15rem] border border-white/8 bg-[#111719]/75 p-5 text-sm leading-8 text-[#e8dfd2]">
+                          <p className="note-surface copy-strong p-5 text-sm leading-8">
                             {notesPreview.content}
                           </p>
                           <div className="grid gap-3 md:grid-cols-3">
@@ -701,7 +733,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           )}
                         </div>
                       ) : (
-                        <div className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-5 text-sm leading-7 text-[#ddd5c8]">
+                        <div className="app-card copy-soft p-5 text-sm leading-7">
                           No {confirmationTab} actions yet.
                         </div>
                       )}
@@ -711,7 +743,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       <MetricCard label="Awaiting review" value={String(pendingCount)} detail="Nothing executes automatically" />
                       <MetricCard label="Approved" value={String(confirmationGroups.approved.length)} detail="Actions already accepted" />
                       <DashboardPanel title="Approval Rules">
-                        <ul className="space-y-3 text-sm leading-7 text-[#e5ddd0]">
+                        <ul className="copy-strong space-y-3 text-sm leading-7">
                           <li>• Low risk: summaries, tags, and note insights.</li>
                           <li>• Medium risk: reminders, drafts, and extracted tasks.</li>
                           <li>• High risk: calls and future external integrations.</li>
@@ -729,7 +761,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       {assistantFeed.length > 0 ? (
                         <div className="space-y-3">
                           {assistantFeed.map((message) => (
-                            <div key={message} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-[#efe5d8]">
+                            <div key={message} className="app-card copy-strong p-4 text-sm leading-7">
                               {message}
                             </div>
                           ))}
@@ -741,7 +773,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                     <DashboardPanel title="Command Patterns">
                       <div className="space-y-3">
                         {commandSamples.map((sample) => (
-                          <button key={sample} type="button" onClick={() => setCommand(sample)} className="w-full rounded-[1.1rem] border border-white/8 bg-white/[0.03] px-4 py-4 text-left text-sm text-[#efe7da] transition hover:border-[#a07f43]/40">
+                          <button key={sample} type="button" onClick={() => setCommand(sample)} className="app-card title-soft w-full px-4 py-4 text-left text-sm transition hover:border-[color:color-mix(in_srgb,var(--warn)_36%,transparent_64%)]">
                             {sample}
                           </button>
                         ))}
@@ -761,13 +793,13 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                               className={clsx(
                                 "w-full rounded-[1.1rem] border px-4 py-4 text-left transition",
                                 selectedDraft?.id === draft.id
-                                  ? "border-[#56d3d0]/40 bg-[rgba(86,211,208,0.08)]"
-                                  : "border-white/8 bg-white/[0.03] hover:border-[#a07f43]/40",
+                                  ? "border-[color:color-mix(in_srgb,var(--accent)_40%,transparent_60%)] bg-[color:color-mix(in_srgb,var(--accent)_8%,transparent_92%)]"
+                                  : "border-[color:color-mix(in_srgb,var(--surface-outline)_55%,transparent_45%)] bg-[var(--surface-elevated)] hover:border-[color:color-mix(in_srgb,var(--warn)_36%,transparent_64%)]",
                               )}
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div>
-                                  <p className="text-base text-[#f3ebde]">{draft.subject}</p>
+                                  <p className="title-main text-base">{draft.subject}</p>
                                   <p className="mt-1 text-sm text-muted">{draft.recipient}</p>
                                 </div>
                                 <StatusPill value={draft.status} tone={draft.status === "approved" ? "success" : "warning"} />
@@ -880,9 +912,9 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                   <DashboardPanel title="Today's Schedule">
                     <div className="space-y-4">
                       {scheduleItems.map((item) => (
-                        <div key={`${item.time}-${item.title}`} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
-                          <p className="text-sm uppercase tracking-[0.18em] text-[#56d3d0]">{item.time}</p>
-                          <p className="mt-2 text-xl text-[#f5eee2]">{item.title}</p>
+                        <div key={`${item.time}-${item.title}`} className="app-card p-4">
+                          <p className="accent-copy text-sm uppercase tracking-[0.18em]">{item.time}</p>
+                          <p className="title-main mt-2 text-xl">{item.title}</p>
                           <p className="mt-1 text-sm text-muted">{item.detail}</p>
                         </div>
                       ))}
@@ -898,15 +930,15 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       {calls.length > 0 ? (
                         <div className="space-y-4">
                           {calls.map((call) => (
-                            <div key={call.id} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
+                            <div key={call.id} className="app-card p-4">
                               <div className="flex items-center justify-between gap-3">
                                 <div>
-                                  <p className="text-xl text-[#f5ede1]">{call.contactName}</p>
+                                  <p className="title-main text-xl">{call.contactName}</p>
                                   <p className="mt-1 text-sm text-muted">{call.purpose}</p>
                                 </div>
                                 <StatusPill value={call.status} tone={call.status === "pending" ? "warning" : "success"} />
                               </div>
-                              <p className="mt-4 text-sm leading-7 text-[#e6ddcf]">{call.script}</p>
+                              <p className="copy-strong mt-4 text-sm leading-7">{call.script}</p>
                             </div>
                           ))}
                         </div>
@@ -915,9 +947,9 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       )}
                     </DashboardPanel>
                     <DashboardPanel title="Latest Summary">
-                      <p className="text-sm leading-8 text-[#e9e0d3]">{calls[0]?.summary ?? "Approve a call plan to generate a transcript and summary."}</p>
+                      <p className="copy-strong text-sm leading-8">{calls[0]?.summary ?? "Approve a call plan to generate a transcript and summary."}</p>
                       {calls[0]?.transcript ? (
-                        <pre className="mt-4 whitespace-pre-wrap rounded-[1rem] border border-white/8 bg-[#111719]/75 p-4 text-xs leading-7 text-[#d7d0c4]">
+                        <pre className="note-surface copy-soft mt-4 whitespace-pre-wrap p-4 text-xs leading-7">
                           {calls[0].transcript}
                         </pre>
                       ) : null}
@@ -958,18 +990,60 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                 <SectionPage eyebrow="Settings" title="Preferences and future integrations." description="This area is ready for auth preferences, integration toggles, and consent controls once the backend layer is added.">
                   <div className="grid gap-4 md:grid-cols-2">
                     <DashboardPanel title="Assistant Preferences">
-                      <ul className="space-y-3 text-sm leading-7 text-[#e7dfd1]">
+                      <ul className="copy-strong space-y-3 text-sm leading-7">
                         <li>• Default tone: calm and professional</li>
                         <li>• Important actions require explicit approval</li>
                         <li>• Simulated calls identify JARVIS clearly</li>
                       </ul>
                     </DashboardPanel>
                     <DashboardPanel title="Coming Integrations">
-                      <ul className="space-y-3 text-sm leading-7 text-[#e7dfd1]">
+                      <ul className="copy-strong space-y-3 text-sm leading-7">
                         <li>• Google Calendar</li>
                         <li>• Gmail or Outlook drafts and send approvals</li>
                         <li>• Real outbound calls with policy-safe confirmation</li>
                       </ul>
+                    </DashboardPanel>
+                  </div>
+                  <div className="mt-4">
+                    <DashboardPanel title="Appearance">
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        {themeOptions.map((option) => (
+                          <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => setTheme(option.key)}
+                            className={clsx(
+                              "theme-card",
+                              theme === option.key && "active",
+                            )}
+                          >
+                            <div className="theme-card-swatches">
+                              <span style={{ backgroundColor: option.accent }} />
+                              <span />
+                              <span />
+                            </div>
+                            <div className="mt-4 flex items-center justify-between gap-3">
+                              <div>
+                                <p className="title-main text-base">{option.label}</p>
+                                <p className="mt-1 text-sm text-muted">
+                                  {option.key === "carbon"
+                                    ? "Default dark command center"
+                                    : option.key === "light"
+                                      ? "Bright daytime workspace"
+                                      : option.key === "dawn"
+                                        ? "Warm editorial amber"
+                                        : "Cool deep-sea blue"}
+                                </p>
+                              </div>
+                              {theme === option.key ? (
+                                <div className="icon-chip h-10 w-10">
+                                  {option.key === "light" ? <SunMedium className="h-4 w-4" /> : option.key === "carbon" ? <MoonStar className="h-4 w-4" /> : <Palette className="h-4 w-4" />}
+                                </div>
+                              ) : null}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </DashboardPanel>
                   </div>
                 </SectionPage>
@@ -980,6 +1054,22 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
       </div>
       <MobileNav section={section} />
     </main>
+  );
+}
+
+function JarvisBrand() {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="jarvis-logo" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+      <div>
+        <p className="font-display text-[2.35rem] leading-none tracking-[0.18em] text-[var(--brand-wordmark)]">JARVIS</p>
+        <p className="mt-1 text-[0.72rem] uppercase tracking-[0.26em] text-[var(--brand-subtitle)]">Life Command</p>
+      </div>
+    </div>
   );
 }
 
@@ -996,14 +1086,14 @@ function TopCommandBar({
     <div className="flex items-start gap-4">
       <div className="command-bar flex-1">
         <button type="button" className="icon-chip hidden sm:inline-flex">
-          <Sparkles className="h-4 w-4 text-[#e4c08d]" />
+          <Sparkles className="h-4 w-4 text-[var(--warn)]" />
         </button>
 
         <div className="min-w-0 flex-1">
-          <p className="text-base text-[#e9e1d5]">What would you like JARVIS to do?</p>
+          <p className="title-soft text-base">What would you like JARVIS to do?</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {commandSamples.slice(0, 2).map((sample) => (
-              <button key={sample} type="button" onClick={() => setCommand(sample)} className="rounded-full border border-white/8 px-3 py-1.5 text-sm text-muted transition hover:border-[#a07f43]/45 hover:text-[#efe8da]">
+              <button key={sample} type="button" onClick={() => setCommand(sample)} className="rounded-full border border-[color:color-mix(in_srgb,var(--surface-outline)_55%,transparent_45%)] px-3 py-1.5 text-sm text-muted transition hover:border-[color:color-mix(in_srgb,var(--warn)_40%,transparent_60%)] hover:text-[var(--title)]">
                 {sample}
               </button>
             ))}
@@ -1017,24 +1107,24 @@ function TopCommandBar({
               }
             }}
             placeholder="Try: Remind me to study tomorrow at 10am"
-            className="mt-3 w-full bg-transparent text-sm text-[#f7f0e2] outline-none placeholder:text-muted"
+            className="mt-3 w-full bg-transparent text-sm text-[var(--title)] outline-none placeholder:text-muted"
           />
         </div>
 
         <button type="button" className="icon-chip" onClick={submitCommand}>
-          <Send className="h-4 w-4 text-[#f0cf94]" />
+          <Send className="h-4 w-4 text-[var(--warn)]" />
         </button>
       </div>
 
       <div className="hidden items-center gap-3 lg:flex">
         <button type="button" className="icon-chip">
-          <Search className="h-4 w-4 text-[#e4c08d]" />
+          <Search className="h-4 w-4 text-[var(--warn)]" />
         </button>
         <button type="button" className="icon-chip">
-          <SunMedium className="h-4 w-4 text-[#e4c08d]" />
+          <SunMedium className="h-4 w-4 text-[var(--warn)]" />
         </button>
         <button type="button" className="icon-chip">
-          <Bell className="h-4 w-4 text-[#f2eee6]" />
+          <Bell className="h-4 w-4 text-[var(--title)]" />
         </button>
       </div>
     </div>
@@ -1076,10 +1166,10 @@ function SectionPage({
     <div className="mt-5">
       <section className="hero-panel">
         <p className="eyebrow">{eyebrow}</p>
-        <h1 className="mt-5 max-w-[760px] font-display text-[2.8rem] leading-[1.05] text-[#ead3af] sm:text-[3.6rem]">
+        <h1 className="title-hero mt-5 max-w-[760px] font-display text-[2.8rem] leading-[1.05] sm:text-[3.6rem]">
           {title}
         </h1>
-        <p className="mt-4 max-w-[720px] text-lg leading-8 text-[#f0e7d9]">{description}</p>
+        <p className="copy-strong mt-4 max-w-[720px] text-lg leading-8">{description}</p>
       </section>
       <div className="mt-4">{children}</div>
     </div>
@@ -1088,9 +1178,9 @@ function SectionPage({
 
 function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="rounded-[1.15rem] border border-dashed border-white/12 bg-white/[0.02] p-5">
-      <p className="text-base text-[#efe4d6]">{title}</p>
-      <p className="mt-2 text-sm leading-7 text-[#bdb7ab]">{description}</p>
+    <div className="empty-card p-5">
+      <p className="title-soft text-base">{title}</p>
+      <p className="copy-soft mt-2 text-sm leading-7">{description}</p>
     </div>
   );
 }
@@ -1137,27 +1227,27 @@ function TaskRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex items-start gap-4 border-b border-white/8 pb-4 last:border-b-0 last:pb-0">
+    <div className="flex items-start gap-4 border-b border-[color:color-mix(in_srgb,var(--surface-outline)_35%,transparent_65%)] pb-4 last:border-b-0 last:pb-0">
       <button
         type="button"
         onClick={onToggle}
         className={clsx(
           "mt-1 grid h-5 w-5 place-items-center rounded-full border",
           task.status === "done"
-            ? "border-[#56d3d0] bg-[#56d3d0]/80"
+            ? "border-[var(--accent)] bg-[color:color-mix(in_srgb,var(--accent)_76%,transparent_24%)]"
             : task.status === "overdue"
-              ? "border-white/60"
-              : "border-white/70",
+              ? "border-[color:color-mix(in_srgb,var(--danger)_70%,transparent_30%)]"
+              : "border-[color:color-mix(in_srgb,var(--text)_60%,transparent_40%)]",
         )}
       >
-        {task.status === "done" ? <Check className="h-4 w-4 text-[#071014]" /> : null}
+        {task.status === "done" ? <Check className="h-4 w-4 text-[var(--bg)]" /> : null}
       </button>
       <div className="flex-1">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className={clsx("text-xl", task.status === "done" ? "text-[#56d3d0]" : "text-[#f5efe4]")}>{task.title}</p>
+            <p className={clsx("text-xl", task.status === "done" ? "text-[var(--accent)]" : "title-main")}>{task.title}</p>
             <p className="mt-1 text-sm text-muted">{task.due}</p>
-            {task.description ? <p className="mt-2 text-sm leading-6 text-[#d8d1c5]">{task.description}</p> : null}
+            {task.description ? <p className="copy-soft mt-2 text-sm leading-6">{task.description}</p> : null}
           </div>
           <div className="flex items-center gap-2">
             <StatusPill
@@ -1165,7 +1255,7 @@ function TaskRow({
               tone={task.status === "overdue" ? "danger" : task.priority === "medium" ? "warning" : "neutral"}
             />
             <button type="button" onClick={onDelete} className="icon-chip h-10 w-10">
-              <Trash2 className="h-4 w-4 text-[#d6cec0]" />
+              <Trash2 className="copy-soft h-4 w-4" />
             </button>
           </div>
         </div>
@@ -1176,10 +1266,10 @@ function TaskRow({
 
 function NotePreviewCard({ note }: { note: Note }) {
   return (
-    <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-5">
+    <div className="app-card p-5">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xl text-[#f6f0e4]">{note.title}</p>
+          <p className="title-main text-xl">{note.title}</p>
           <p className="mt-1 text-sm text-muted">Recently updated</p>
         </div>
         <button type="button" className="text-muted">
@@ -1189,13 +1279,13 @@ function NotePreviewCard({ note }: { note: Note }) {
 
       <div className="mt-4 flex gap-2">
         {note.tags.map((tag) => (
-          <span key={tag} className="rounded-xl bg-white/8 px-3 py-1 text-sm text-[#ece5d8]">
+          <span key={tag} className="tag-chip px-3 py-1 text-sm">
             {tag}
           </span>
         ))}
       </div>
 
-      <ul className="mt-4 space-y-2 text-sm leading-7 text-[#d8d3c7]">
+      <ul className="copy-soft mt-4 space-y-2 text-sm leading-7">
         {note.content
           .replace("Messy notes:", "")
           .split(",")
@@ -1218,12 +1308,12 @@ function ReminderCard({
   onDelete: (reminderId: string) => void;
 }) {
   return (
-    <div className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
+    <div className="app-card p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-lg text-[#f5eee3]">{reminder.title}</p>
+          <p className="title-main text-lg">{reminder.title}</p>
           <p className="mt-1 text-sm text-muted">{reminder.when}</p>
-          <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#9fd9d7]">Repeats {reminder.repeat}</p>
+          <p className="accent-copy mt-2 text-xs uppercase tracking-[0.18em]">Repeats {reminder.repeat}</p>
         </div>
         <StatusPill
           value={reminder.priority}
@@ -1319,19 +1409,19 @@ function StatChip({
   tone: "teal" | "rose" | "gold";
 }) {
   return (
-    <div className="rounded-[1.15rem] border border-white/8 bg-[#111719]/75 px-4 py-4">
+    <div className="status-panel px-4 py-4">
       <div className="flex items-center gap-3">
         <Icon
           className={clsx(
             "h-5 w-5",
-            tone === "teal" && "text-[#56d3d0]",
-            tone === "rose" && "text-[#ff6e71]",
-            tone === "gold" && "text-[#e8c182]",
+            tone === "teal" && "text-[var(--accent)]",
+            tone === "rose" && "text-[var(--danger)]",
+            tone === "gold" && "text-[var(--warn)]",
           )}
         />
-        <p className="text-[2rem] leading-none text-[#f2e7d5]">{value}</p>
+        <p className="title-soft text-[2rem] leading-none">{value}</p>
       </div>
-      <p className="mt-2 text-sm text-[#d8d2c7]">{label}</p>
+      <p className="copy-soft mt-2 text-sm">{label}</p>
     </div>
   );
 }
@@ -1346,13 +1436,13 @@ function ConfirmationRow({
   onCancel: () => void;
 }) {
   return (
-    <div className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-3.5">
+    <div className="app-card p-3.5">
       <div className="flex items-start gap-3">
         <div className={clsx("mt-0.5 rounded-[0.8rem] px-3 py-2 text-sm", iconToneClass(action.type))}>{iconSymbol(action.type)}</div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-base text-[#f4eee3]">{action.title}</p>
+              <p className="title-main text-base">{action.title}</p>
               <p className="mt-1 text-sm text-muted">{action.description}</p>
             </div>
             <StatusPill value={action.risk} tone={action.risk === "high" ? "danger" : action.risk === "medium" ? "warning" : "success"} />
@@ -1385,7 +1475,7 @@ function EditableConfirmationCard({
   const taskList = Array.isArray(action.payload.tasks) ? action.payload.tasks.map((item) => String(item)).join("\n") : "";
 
   return (
-    <div className="rounded-[1.25rem] border border-white/8 bg-white/[0.03] p-4">
+    <div className="app-card p-4">
       <div className="flex items-start gap-3">
         <div className={clsx("mt-0.5 rounded-[0.8rem] px-3 py-2 text-sm", iconToneClass(action.type))}>{iconSymbol(action.type)}</div>
         <div className="min-w-0 flex-1">
@@ -1437,13 +1527,13 @@ function EditableConfirmationCard({
 
 function HistoryConfirmationCard({ action }: { action: PendingAction }) {
   return (
-    <div className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-4">
+    <div className="app-card p-4">
       <div className="flex items-start gap-3">
         <div className={clsx("mt-0.5 rounded-[0.8rem] px-3 py-2 text-sm", iconToneClass(action.type))}>{iconSymbol(action.type)}</div>
         <div className="flex-1">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-base text-[#f4eee3]">{action.title}</p>
+              <p className="title-main text-base">{action.title}</p>
               <p className="mt-1 text-sm text-muted">{action.description}</p>
             </div>
             <StatusPill
@@ -1451,7 +1541,7 @@ function HistoryConfirmationCard({ action }: { action: PendingAction }) {
               tone={action.status === "approved" ? "success" : "neutral"}
             />
           </div>
-          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[#9c988f]">
+          <p className="copy-soft mt-3 text-xs uppercase tracking-[0.18em]">
             Risk: {action.risk}
           </p>
         </div>
@@ -1489,7 +1579,7 @@ function iconSymbol(type: PendingAction["type"]) {
 function NotificationRow({ notification }: { notification: NotificationItem }) {
   return (
     <div className="flex items-start gap-4">
-      <div className="grid h-11 w-11 place-items-center rounded-[0.95rem] bg-white/[0.04] text-xl">
+      <div className="notification-icon">
         {notification.source === "University LMS"
           ? "🎓"
           : notification.source === "Work"
@@ -1501,8 +1591,8 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xl text-[#f6f0e4]">{notification.source}</p>
-            <p className="mt-1 text-sm text-[#d8d2c7]">{notification.body}</p>
+            <p className="title-main text-xl">{notification.source}</p>
+            <p className="copy-soft mt-1 text-sm">{notification.body}</p>
           </div>
           <StatusPill value={notification.category} tone={notification.category === "urgent" ? "danger" : notification.category === "important" ? "warning" : "neutral"} />
         </div>
@@ -1513,15 +1603,7 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
 
 function StatusPill({ value, tone }: { value: string; tone: "neutral" | "warning" | "danger" | "success" }) {
   return (
-    <span
-      className={clsx(
-        "rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]",
-        tone === "danger" && "bg-[#4f2b2f] text-[#f9c8bf]",
-        tone === "warning" && "bg-[#50422a] text-[#f2d7a2]",
-        tone === "success" && "bg-[#1d433f] text-[#9fe1d4]",
-        tone === "neutral" && "bg-white/10 text-[#d8dfdd]",
-      )}
-    >
+    <span className={clsx("status-pill", tone)}>
       {value.replaceAll("_", " ")}
     </span>
   );
@@ -1531,7 +1613,7 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
   return (
     <div className="feature-panel p-5">
       <p className="eyebrow">{label}</p>
-      <p className="mt-4 font-display text-5xl text-[#e8cfab]">{value}</p>
+      <p className="title-hero mt-4 font-display text-5xl">{value}</p>
       <p className="mt-2 text-sm text-muted">{detail}</p>
     </div>
   );
