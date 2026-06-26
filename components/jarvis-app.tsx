@@ -75,6 +75,13 @@ const themeOptions = [
 ] as const;
 type ThemeName = (typeof themeOptions)[number]["key"];
 const THEME_STORAGE_KEY = "jarvis-theme-v1";
+const activityToneMap = {
+  pending: "warning",
+  approved: "success",
+  simulated: "success",
+  draft: "neutral",
+  active: "neutral",
+} as const;
 
 export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const {
@@ -148,6 +155,47 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   );
 
   const activeConfirmationList = confirmationGroups[confirmationTab];
+  const recentActivity = useMemo(
+    () =>
+      [
+        ...pendingActions.slice(0, 3).map((action) => ({
+          id: action.id,
+          label: action.title,
+          detail: action.description,
+          status: action.status,
+          category:
+            action.type === "place_call"
+              ? "Call plan"
+              : action.type === "draft_email"
+                ? "Email draft"
+                : action.type === "create_tasks_from_note"
+                  ? "Task extraction"
+                  : "Reminder",
+        })),
+        ...calls.slice(0, 1).map((call) => ({
+          id: call.id,
+          label: call.contactName,
+          detail: call.summary ?? call.purpose,
+          status: call.status,
+          category: "Call result",
+        })),
+        ...drafts.slice(0, 1).map((draft) => ({
+          id: draft.id,
+          label: draft.subject,
+          detail: draft.recipient,
+          status: draft.status,
+          category: "Draft status",
+        })),
+        ...reminders.slice(0, 1).map((reminder) => ({
+          id: reminder.id,
+          label: reminder.title,
+          detail: reminder.when,
+          status: reminder.status,
+          category: "Reminder pulse",
+        })),
+      ].slice(0, 6),
+    [calls, drafts, pendingActions, reminders],
+  );
 
   const todayBrief = useMemo(() => {
     const lines: string[] = [];
@@ -337,24 +385,9 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               </div>
             </aside>
 
-            <section className="flex flex-1 flex-col px-5 py-5 lg:px-6">
+            <section className="relative flex flex-1 flex-col px-5 py-5 lg:px-6">
+              <ThemeRail theme={theme} setTheme={setTheme} />
               <TopCommandBar command={command} setCommand={setCommand} submitCommand={handleSubmitCommand} />
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="theme-toggle-shell flex items-center gap-2">
-                  {themeOptions.map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      onClick={() => setTheme(option.key)}
-                      className={clsx("theme-pill", theme === option.key && "active")}
-                    >
-                      <span className="theme-swatch" style={{ backgroundColor: option.accent }} />
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-sm text-muted">Theme controls are live across the app and saved locally.</p>
-              </div>
 
               {section === "dashboard" ? (
                 <>
@@ -536,14 +569,35 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                     </DashboardPanel>
                   </div>
 
-                  <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                    <MetricCard label="Open approvals" value={String(pendingCount)} detail="Transparent action queue" />
-                    <MetricCard label="Priority tasks" value={String(highPriorityTasks.length)} detail="Focused for today" />
-                    <MetricCard
-                      label="Simulated calls"
-                      value={String(calls.filter((call) => call.status === "simulated").length)}
-                      detail="Ready for follow-up"
-                    />
+                  <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                    <DashboardPanel title="Recent Activity Lane" actionLabel="Open assistant" href="/assistant">
+                      {recentActivity.length > 0 ? (
+                        <div className="space-y-3">
+                          {recentActivity.map((item) => (
+                            <ActivityRow
+                              key={`${item.category}-${item.id}`}
+                              label={item.label}
+                              detail={item.detail}
+                              category={item.category}
+                              tone={activityToneMap[item.status as keyof typeof activityToneMap] ?? "neutral"}
+                              status={item.status}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <EmptyState title="No recent activity yet" description="As you approve reminders, draft emails, and simulate calls, JARVIS will build a living activity trail here." />
+                      )}
+                    </DashboardPanel>
+
+                    <div className="grid gap-4 lg:grid-cols-3 xl:grid-cols-1">
+                      <MetricCard label="Open approvals" value={String(pendingCount)} detail="Transparent action queue" />
+                      <MetricCard label="Priority tasks" value={String(highPriorityTasks.length)} detail="Focused for today" />
+                      <MetricCard
+                        label="Simulated calls"
+                        value={String(calls.filter((call) => call.status === "simulated").length)}
+                        detail="Ready for follow-up"
+                      />
+                    </div>
                   </div>
 
                   <div className="mt-4 feature-panel">
@@ -1057,6 +1111,39 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   );
 }
 
+function ThemeRail({
+  theme,
+  setTheme,
+}: {
+  theme: ThemeName;
+  setTheme: (theme: ThemeName) => void;
+}) {
+  return (
+    <div className="theme-rail hidden lg:flex" aria-label="Theme controls">
+      <div className="theme-rail-trigger">
+        <Palette className="h-4 w-4" />
+        <span>Theme</span>
+      </div>
+      <div className="theme-rail-panel">
+        <p className="theme-rail-label">Appearance</p>
+        <div className="theme-rail-options">
+          {themeOptions.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setTheme(option.key)}
+              className={clsx("theme-pill", theme === option.key && "active")}
+            >
+              <span className="theme-swatch" style={{ backgroundColor: option.accent }} />
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function JarvisBrand() {
   return (
     <div className="flex items-center gap-3">
@@ -1083,7 +1170,7 @@ function TopCommandBar({
   submitCommand: () => void;
 }) {
   return (
-    <div className="flex items-start gap-4">
+    <div className="flex items-start gap-4 lg:pr-[15.5rem]">
       <div className="command-bar flex-1">
         <button type="button" className="icon-chip hidden sm:inline-flex">
           <Sparkles className="h-4 w-4 text-[var(--warn)]" />
@@ -1214,6 +1301,31 @@ function DashboardPanel({
       </div>
       <div>{children}</div>
     </section>
+  );
+}
+
+function ActivityRow({
+  label,
+  detail,
+  category,
+  status,
+  tone,
+}: {
+  label: string;
+  detail: string;
+  category: string;
+  status: string;
+  tone: "neutral" | "warning" | "danger" | "success";
+}) {
+  return (
+    <div className="app-card flex items-start justify-between gap-4 p-4">
+      <div className="min-w-0">
+        <p className="accent-copy text-xs uppercase tracking-[0.18em]">{category}</p>
+        <p className="title-main mt-2 text-lg">{label}</p>
+        <p className="copy-soft mt-2 text-sm leading-6">{detail}</p>
+      </div>
+      <StatusPill value={status} tone={tone} />
+    </div>
   );
 }
 
