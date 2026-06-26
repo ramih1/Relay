@@ -21,27 +21,12 @@ import {
   Sparkles,
   StickyNote,
   SunMedium,
+  Trash2,
 } from "lucide-react";
-import { useState } from "react";
-import {
-  initialCalls,
-  initialEmailDrafts,
-  initialNotes,
-  initialNotifications,
-  initialPendingActions,
-  initialReminders,
-  initialTasks,
-} from "@/lib/data";
-import type {
-  CallRequest,
-  EmailDraft,
-  NavKey,
-  Note,
-  NotificationItem,
-  PendingAction,
-  Reminder,
-  Task,
-} from "@/lib/types";
+import { useMemo, useState } from "react";
+import { initialNotifications } from "@/lib/data";
+import type { NavKey, Note, NotificationItem, PendingAction, Task } from "@/lib/types";
+import { useJarvis } from "@/components/jarvis-provider";
 
 const navItems: { key: NavKey; label: string; href: string; icon: ComponentType<{ className?: string }> }[] = [
   { key: "dashboard", label: "Dashboard", href: "/", icon: Home },
@@ -76,20 +61,30 @@ const suggestions = [
   "3 tasks can be scheduled around your classes.",
 ];
 
-const todayBrief =
-  "You have 2 reminders, 1 overdue task, 1 email draft waiting for approval, and a call request ready to confirm.";
-
 export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
+  const {
+    tasks,
+    notes,
+    reminders,
+    drafts,
+    calls,
+    pendingActions,
+    assistantFeed,
+    submitCommand,
+    approveAction,
+    cancelAction,
+    updatePendingAction,
+    addTask,
+    toggleTask,
+    deleteTask,
+    addNote,
+    deleteNote,
+  } = useJarvis();
+
   const [command, setCommand] = useState("");
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [notes] = useState<Note[]>(initialNotes);
-  const [reminders, setReminders] = useState<Reminder[]>(initialReminders);
-  const [drafts, setDrafts] = useState<EmailDraft[]>(initialEmailDrafts);
-  const [calls, setCalls] = useState<CallRequest[]>(initialCalls);
-  const [pendingActions, setPendingActions] = useState<PendingAction[]>(initialPendingActions);
-  const [assistantFeed, setAssistantFeed] = useState<string[]>([
-    "I can prepare reminders, email drafts, note summaries, and simulated call plans. Important actions always wait for your approval.",
-  ]);
+  const [taskForm, setTaskForm] = useState({ title: "", due: "", priority: "medium" as Task["priority"], description: "" });
+  const [noteForm, setNoteForm] = useState({ title: "", content: "" });
+  const [selectedNoteId, setSelectedNoteId] = useState<string>(notes[0]?.id ?? "");
 
   const pendingApprovals = pendingActions.filter((item) => item.status === "pending");
   const pendingCount = pendingApprovals.length;
@@ -98,197 +93,49 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const activeReminderCount = reminders.filter((reminder) => reminder.status === "active").length;
   const pendingDraftCount = drafts.filter((draft) => draft.status === "draft").length;
   const pendingCallCount = calls.filter((call) => call.status === "pending").length;
-  const notesPreview = notes[0];
+  const notesPreview = notes.find((note) => note.id === selectedNoteId) ?? notes[0];
+  const todayBrief = `You have ${activeReminderCount} reminders, ${overdueCount} overdue task${overdueCount === 1 ? "" : "s"}, ${pendingDraftCount} email draft${pendingDraftCount === 1 ? "" : "s"} waiting for approval, and ${pendingCallCount} call request${pendingCallCount === 1 ? "" : "s"} ready to confirm.`;
 
-  function submitCommand() {
+  const filteredTaskGroups = useMemo(
+    () => ({
+      today: tasks.filter((task) => task.due.toLowerCase().includes("today")),
+      upcoming: tasks.filter((task) => !task.due.toLowerCase().includes("today") && task.status !== "overdue"),
+      overdue: tasks.filter((task) => task.status === "overdue"),
+      completed: tasks.filter((task) => task.status === "done"),
+    }),
+    [tasks],
+  );
+
+  function handleSubmitCommand() {
     if (!command.trim()) {
       return;
     }
-
-    const input = command.trim();
-    const lower = input.toLowerCase();
-
-    if (lower.includes("remind me")) {
-      const newAction: PendingAction = {
-        id: crypto.randomUUID(),
-        type: "create_reminder",
-        title: "Create Reminder",
-        description: "Submit project • Fri, 5:00 PM",
-        risk: "medium",
-        status: "pending",
-        payload: {
-          title: "Submit project",
-          when: "Friday, 5:00 PM",
-          repeat: "none",
-          priority: "high",
-        },
-      };
-      setPendingActions((current) => [newAction, ...current]);
-      setAssistantFeed((current) => [
-        `Prepared a reminder proposal for "${input}". It is waiting in Confirmations.`,
-        ...current,
-      ]);
-    } else if (lower.includes("draft an email")) {
-      const draftId = crypto.randomUUID();
-      const newDraft: EmailDraft = {
-        id: draftId,
-        recipient: "Recipient to be confirmed",
-        subject: "Request for an Extension",
-        tone: "professional",
-        status: "draft",
-        body:
-          "Hi,\n\nI hope you're doing well. I wanted to ask whether a short extension would be possible. I have been working steadily on the assignment and would appreciate a little more time to submit my best work.\n\nThank you for considering it.\n\nBest,\nRami",
-      };
-      const newAction: PendingAction = {
-        id: crypto.randomUUID(),
-        type: "draft_email",
-        title: "Email Draft to Professor",
-        description: "Asking for extension on assignment",
-        risk: "medium",
-        status: "pending",
-        payload: { draftId },
-      };
-      setDrafts((current) => [newDraft, ...current]);
-      setPendingActions((current) => [newAction, ...current]);
-      setAssistantFeed((current) => [
-        "Drafted an email request and queued it for approval before saving.",
-        ...current,
-      ]);
-    } else if (lower.includes("call")) {
-      const callId = crypto.randomUUID();
-      const newCall: CallRequest = {
-        id: callId,
-        contactName: "Campus Gym",
-        phoneNumber: "(555) 210-1184",
-        purpose: "Ask if basketball court is free tonight",
-        script:
-          "Hi, I'm JARVIS, an AI assistant calling on behalf of Rami. I'm checking whether the basketball court is free tonight and whether there are any time restrictions.",
-        allowedActions: ["Ask availability", "Ask closing time"],
-        restrictedActions: ["Do not book anything", "Do not share private details"],
-        status: "pending",
-      };
-      const newAction: PendingAction = {
-        id: crypto.randomUUID(),
-        type: "place_call",
-        title: "Call Campus Gym",
-        description: "Ask about basketball court availability",
-        risk: "high",
-        status: "pending",
-        payload: { callId },
-      };
-      setCalls((current) => [newCall, ...current]);
-      setPendingActions((current) => [newAction, ...current]);
-      setAssistantFeed((current) => [
-        "Created a transparent call plan with a script and allowed actions. It is waiting for approval.",
-        ...current,
-      ]);
-    } else if (lower.includes("note") || lower.includes("task")) {
-      const newAction: PendingAction = {
-        id: crypto.randomUUID(),
-        type: "create_tasks_from_note",
-        title: "Create Task from Note",
-        description: "3 tasks identified",
-        risk: "low",
-        status: "pending",
-        payload: {
-          tasks: [
-            "Confirm timeline with professor",
-            "Clean dataset labels",
-            "Email the team the experiment checklist",
-          ],
-        },
-      };
-      setPendingActions((current) => [newAction, ...current]);
-      setAssistantFeed((current) => [
-        "Extracted action items from your note and sent them to Confirmations for review.",
-        ...current,
-      ]);
-    } else {
-      setAssistantFeed((current) => [
-        "I understood the request at a high level and would ask one focused follow-up before creating an action proposal in the real agent flow.",
-        ...current,
-      ]);
-    }
-
+    submitCommand(command);
     setCommand("");
   }
 
-  function approveAction(action: PendingAction) {
-    if (action.type === "create_reminder") {
-      setReminders((current) => [
-        {
-          id: crypto.randomUUID(),
-          title: String(action.payload.title),
-          when: String(action.payload.when),
-          repeat: "none",
-          priority: "high",
-          status: "active",
-        },
-        ...current,
-      ]);
+  function handleAddTask() {
+    if (!taskForm.title.trim() || !taskForm.due.trim()) {
+      return;
     }
 
-    if (action.type === "create_tasks_from_note") {
-      const extracted = Array.isArray(action.payload.tasks) ? action.payload.tasks : [];
-      setTasks((current) => [
-        ...extracted.map((title, index) => ({
-          id: crypto.randomUUID(),
-          title: String(title),
-          due: index === 0 ? "Tomorrow, 1:00 PM" : "Friday, 4:00 PM",
-          status: "pending" as const,
-          priority: "medium" as const,
-        })),
-        ...current,
-      ]);
-    }
+    addTask({
+      title: taskForm.title.trim(),
+      due: taskForm.due.trim(),
+      priority: taskForm.priority,
+      description: taskForm.description.trim() || undefined,
+    });
 
-    if (action.type === "draft_email") {
-      const draftId = String(action.payload.draftId);
-      setDrafts((current) =>
-        current.map((draft) => (draft.id === draftId ? { ...draft, status: "approved" } : draft)),
-      );
-    }
-
-    if (action.type === "place_call") {
-      const callId = String(action.payload.callId);
-      setCalls((current) =>
-        current.map((call) =>
-          call.id === callId
-            ? {
-                ...call,
-                status: "simulated",
-                transcript:
-                  "JARVIS: Hi, I'm JARVIS calling on behalf of Rami.\nGym: The court should be free after 7:30 PM.\nJARVIS: Thanks. Is there a closing time?\nGym: We close at 10 PM tonight.\nJARVIS: Perfect, I'll pass that along.",
-                summary: "Court is free after 7:30 PM and the gym closes at 10 PM.",
-              }
-            : call,
-        ),
-      );
-    }
-
-    if (action.type === "create_followup_task") {
-      setReminders((current) => [
-        {
-          id: crypto.randomUUID(),
-          title: String(action.payload.title),
-          when: String(action.payload.when),
-          repeat: "none",
-          priority: "medium",
-          status: "active",
-        },
-        ...current,
-      ]);
-    }
-
-    setPendingActions((current) =>
-      current.map((item) => (item.id === action.id ? { ...item, status: "approved" } : item)),
-    );
+    setTaskForm({ title: "", due: "", priority: "medium", description: "" });
   }
 
-  function cancelAction(id: string) {
-    setPendingActions((current) =>
-      current.map((item) => (item.id === id ? { ...item, status: "cancelled" } : item)),
-    );
+  function handleAddNote() {
+    if (!noteForm.title.trim() || !noteForm.content.trim()) {
+      return;
+    }
+
+    addNote({ title: noteForm.title.trim(), content: noteForm.content.trim() });
+    setNoteForm({ title: "", content: "" });
   }
 
   return (
@@ -345,556 +192,482 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                   <div className="absolute left-4 top-5 h-14 w-14 rounded-full border border-[#56d3d0]/25 bg-[radial-gradient(circle,_rgba(86,211,208,0.25),_transparent_58%)] blur-[2px]" />
                   <div className="relative pl-16">
                     <p className="text-lg text-[#eae5db]">JARVIS Online</p>
-                    <p className="mt-1 text-sm text-muted">Ready to help.</p>
+                    <p className="mt-1 text-sm text-muted">Synced across pages.</p>
                   </div>
                 </div>
               </div>
             </aside>
 
             <section className="flex flex-1 flex-col px-5 py-5 lg:px-6">
-              <TopCommandBar command={command} setCommand={setCommand} submitCommand={submitCommand} />
-              {renderSection({
-                section,
-                tasks,
-                notes,
-                reminders,
-                drafts,
-                calls,
-                pendingApprovals,
-                pendingCount,
-                highPriorityTasks,
-                overdueCount,
-                activeReminderCount,
-                pendingDraftCount,
-                pendingCallCount,
-                notesPreview,
-                assistantFeed,
-                approveAction,
-                cancelAction,
-              })}
+              <TopCommandBar command={command} setCommand={setCommand} submitCommand={handleSubmitCommand} />
+
+              {section === "dashboard" ? (
+                <>
+                  <div className="mt-5 grid gap-4 xl:grid-cols-[1.7fr_0.95fr]">
+                    <section className="hero-panel">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="eyebrow">Today Brief</p>
+                          <h1 className="mt-5 font-display text-[3rem] leading-[1.02] text-[#ead3af] sm:text-[4rem]">
+                            Good morning, Rami.
+                          </h1>
+                          <p className="mt-4 max-w-[620px] text-xl leading-9 text-[#f0e9db]">{todayBrief}</p>
+                        </div>
+                        <button type="button" className="soft-outline hidden lg:inline-flex">
+                          Generate again
+                        </button>
+                      </div>
+
+                      <div className="orbital-art" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+
+                      <div className="mt-8 grid gap-3 md:grid-cols-4">
+                        <StatChip icon={Bell} value={activeReminderCount} label="Reminders" tone="teal" />
+                        <StatChip icon={Clock3} value={overdueCount} label="Overdue Task" tone="rose" />
+                        <StatChip icon={Mail} value={pendingDraftCount} label="Email Draft" tone="gold" />
+                        <StatChip icon={PhoneCall} value={pendingCallCount} label="Call Request" tone="teal" />
+                      </div>
+                    </section>
+
+                    <section className="feature-panel">
+                      <div className="mb-6 flex items-center justify-between">
+                        <p className="eyebrow">Schedule</p>
+                        <Link href="/calendar" className="panel-link">
+                          View Calendar
+                        </Link>
+                      </div>
+
+                      <div className="space-y-6">
+                        {scheduleItems.map((item, index) => (
+                          <div key={`${item.time}-${item.title}`} className="flex gap-4">
+                            <div className="flex flex-col items-center">
+                              <span className="h-3 w-3 rounded-full border border-white/90 bg-transparent" />
+                              {index < scheduleItems.length - 1 ? <span className="mt-2 h-full w-px bg-white/10" /> : null}
+                            </div>
+                            <div className="min-w-[78px] text-sm text-[#e3ddd0]">{item.time}</div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3">
+                                <span
+                                  className={clsx(
+                                    "h-2.5 w-2.5 rounded-full",
+                                    item.tone === "teal" ? "bg-[#56d3d0]" : "bg-[#ddb26f]",
+                                  )}
+                                />
+                                <p className="text-xl text-[#f5efe4]">{item.title}</p>
+                              </div>
+                              <p className="mt-1 text-sm text-muted">{item.detail}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                    <DashboardPanel title="Priority Tasks" actionLabel="View all" href="/tasks">
+                      <div className="space-y-4">
+                        {tasks.slice(0, 4).map((task) => (
+                          <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => deleteTask(task.id)} />
+                        ))}
+                      </div>
+                    </DashboardPanel>
+
+                    <DashboardPanel title="Confirmations Queue" actionLabel={`View all (${pendingApprovals.length})`} href="/confirmations">
+                      <div className="space-y-3">
+                        {pendingApprovals.slice(0, 4).map((action) => (
+                          <ConfirmationRow
+                            key={action.id}
+                            action={action}
+                            onApprove={() => approveAction(action.id)}
+                            onCancel={() => cancelAction(action.id)}
+                          />
+                        ))}
+                      </div>
+                    </DashboardPanel>
+
+                    <DashboardPanel title="Notifications Intelligence" actionLabel="View all" href="/notifications">
+                      <div className="space-y-4">
+                        {initialNotifications.map((notification) => (
+                          <NotificationRow key={notification.id} notification={notification} />
+                        ))}
+                      </div>
+                    </DashboardPanel>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                    <DashboardPanel title="Notes Preview" actionLabel="Open notes" href="/notes">
+                      {notesPreview ? <NotePreviewCard note={notesPreview} /> : null}
+                    </DashboardPanel>
+
+                    <DashboardPanel title="Call Assistant" actionLabel="View calls" href="/calls">
+                      <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-center gap-4">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[radial-gradient(circle,_rgba(86,211,208,0.25),_rgba(86,211,208,0.08))] text-[#61ddd5]">
+                              <PhoneCall className="h-7 w-7" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted">Pending Call Plan</p>
+                              <p className="mt-1 text-[2rem] leading-none text-[#f3ebde]">{calls[0]?.contactName ?? "Campus Gym"}</p>
+                              <p className="mt-2 text-sm text-[#ded7ca]">{calls[0]?.purpose ?? "Ask if basketball court is free tonight"}</p>
+                            </div>
+                          </div>
+                          <StatusPill value="high" tone="danger" />
+                        </div>
+
+                        <div className="mt-5 flex flex-wrap gap-3">
+                          <Link href="/calls" className="soft-outline">
+                            Review Plan
+                          </Link>
+                          <button
+                            type="button"
+                            className="jarvis-button"
+                            onClick={() => {
+                              const pendingCall = pendingApprovals.find((action) => action.type === "place_call");
+                              if (pendingCall) {
+                                approveAction(pendingCall.id);
+                              }
+                            }}
+                          >
+                            Approve Call
+                          </button>
+                        </div>
+                      </div>
+                    </DashboardPanel>
+
+                    <DashboardPanel title="AI Suggestions" actionLabel="Open assistant" href="/assistant">
+                      <div className="space-y-3">
+                        {suggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            className="flex w-full items-center justify-between rounded-[1.1rem] border border-white/8 bg-white/[0.03] px-4 py-4 text-left transition hover:border-[#a07f43]/40"
+                          >
+                            <span className="flex items-center gap-3 text-[#efe7da]">
+                              <Sparkles className="h-4 w-4 text-[#56d3d0]" />
+                              <span>{suggestion}</span>
+                            </span>
+                            <ChevronRight className="h-4 w-4 text-muted" />
+                          </button>
+                        ))}
+                      </div>
+                    </DashboardPanel>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                    <MetricCard label="Open approvals" value={String(pendingCount)} detail="Transparent action queue" />
+                    <MetricCard label="Priority tasks" value={String(highPriorityTasks.length)} detail="Focused for today" />
+                    <MetricCard
+                      label="Simulated calls"
+                      value={String(calls.filter((call) => call.status === "simulated").length)}
+                      detail="Ready for follow-up"
+                    />
+                  </div>
+
+                  <div className="mt-4 feature-panel">
+                    <div className="mb-4 flex items-center justify-between">
+                      <p className="eyebrow">Assistant Feed</p>
+                      <Link href="/assistant" className="panel-link">
+                        Open Assistant
+                      </Link>
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      {assistantFeed.slice(0, 4).map((message) => (
+                        <div key={message} className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-[#e8e0d4]">
+                          {message}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : null}
+
+              {section === "tasks" ? (
+                <SectionPage eyebrow="Task Center" title="Manage tasks with real actions." description="Add your own work, complete it, remove it, and keep AI-generated tasks separate until they are approved.">
+                  <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+                    <DashboardPanel title="Task Builder">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <input value={taskForm.title} onChange={(e) => setTaskForm((c) => ({ ...c, title: e.target.value }))} placeholder="Task title" className="field-input md:col-span-2" />
+                        <input value={taskForm.due} onChange={(e) => setTaskForm((c) => ({ ...c, due: e.target.value }))} placeholder="Due time, like Friday 5 PM" className="field-input" />
+                        <select value={taskForm.priority} onChange={(e) => setTaskForm((c) => ({ ...c, priority: e.target.value as Task["priority"] }))} className="field-input">
+                          <option value="low">Low priority</option>
+                          <option value="medium">Medium priority</option>
+                          <option value="high">High priority</option>
+                        </select>
+                        <textarea value={taskForm.description} onChange={(e) => setTaskForm((c) => ({ ...c, description: e.target.value }))} placeholder="Optional description" className="field-input min-h-28 md:col-span-2" />
+                      </div>
+                      <div className="mt-4">
+                        <button type="button" className="jarvis-button" onClick={handleAddTask}>
+                          Create Task
+                        </button>
+                      </div>
+                    </DashboardPanel>
+
+                    <div className="space-y-4">
+                      <MetricCard label="High priority" value={String(highPriorityTasks.length)} detail="Needs focus first" />
+                      <MetricCard label="Overdue" value={String(overdueCount)} detail="Worth clearing today" />
+                      <DashboardPanel title="Suggested Next Move">
+                        <p className="text-sm leading-7 text-[#e7dfd1]">
+                          Convert the research note into approved tasks, then block time after your 3 PM meeting to finish the outline.
+                        </p>
+                      </DashboardPanel>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                    <DashboardPanel title={`Today (${filteredTaskGroups.today.length})`}>
+                      <div className="space-y-4">
+                        {filteredTaskGroups.today.map((task) => (
+                          <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => deleteTask(task.id)} />
+                        ))}
+                      </div>
+                    </DashboardPanel>
+                    <DashboardPanel title={`Upcoming (${filteredTaskGroups.upcoming.length})`}>
+                      <div className="space-y-4">
+                        {filteredTaskGroups.upcoming.map((task) => (
+                          <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => deleteTask(task.id)} />
+                        ))}
+                      </div>
+                    </DashboardPanel>
+                  </div>
+                </SectionPage>
+              ) : null}
+
+              {section === "notes" ? (
+                <SectionPage eyebrow="Notes Workspace" title="Capture messy notes, then structure them." description="Notes can be saved here, browsed across pages, and turned into tasks through the approval flow.">
+                  <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+                    <DashboardPanel title="New Note">
+                      <div className="space-y-3">
+                        <input value={noteForm.title} onChange={(e) => setNoteForm((c) => ({ ...c, title: e.target.value }))} placeholder="Note title" className="field-input" />
+                        <textarea value={noteForm.content} onChange={(e) => setNoteForm((c) => ({ ...c, content: e.target.value }))} placeholder="Paste meeting notes, ideas, or reminders" className="field-input min-h-48" />
+                      </div>
+                      <div className="mt-4">
+                        <button type="button" className="jarvis-button" onClick={handleAddNote}>
+                          Save Note
+                        </button>
+                      </div>
+                    </DashboardPanel>
+
+                    <DashboardPanel title="Note Library">
+                      <div className="space-y-3">
+                        {notes.map((note) => (
+                          <div key={note.id} className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-4">
+                            <button type="button" onClick={() => setSelectedNoteId(note.id)} className="w-full text-left">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-lg text-[#f7efe3]">{note.title}</p>
+                                <span className="text-xs uppercase tracking-[0.2em] text-[#56d3d0]">{note.tags[0]}</span>
+                              </div>
+                              <p className="mt-2 text-sm leading-7 text-[#d8d2c7]">{note.summary}</p>
+                            </button>
+                            <div className="mt-3 flex justify-end">
+                              <button type="button" className="small-action" onClick={() => deleteNote(note.id)}>
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </DashboardPanel>
+                  </div>
+
+                  <div className="mt-4">
+                    <DashboardPanel title={notesPreview?.title ?? "Selected Note"}>
+                      {notesPreview ? (
+                        <div className="space-y-5">
+                          <div className="flex flex-wrap gap-2">
+                            {notesPreview.tags.map((tag) => (
+                              <span key={tag} className="rounded-full border border-white/8 px-3 py-1 text-sm text-[#efe6d7]">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="rounded-[1.15rem] border border-white/8 bg-[#111719]/75 p-5 text-sm leading-8 text-[#e8dfd2]">
+                            {notesPreview.content}
+                          </p>
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <button type="button" className="soft-outline">
+                              Summarize
+                            </button>
+                            <button type="button" className="soft-outline">
+                              Suggest Tags
+                            </button>
+                            <button type="button" className="jarvis-button" onClick={() => submitCommand("Turn this note into tasks")}>
+                              Extract Tasks
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </DashboardPanel>
+                  </div>
+                </SectionPage>
+              ) : null}
+
+              {section === "confirmations" ? (
+                <SectionPage eyebrow="Approval Center" title="Review and edit actions before they happen." description="You can now adjust reminder details and extracted tasks right inside the approval queue before approving them.">
+                  <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                    <DashboardPanel title={`Pending Actions (${pendingApprovals.length})`}>
+                      <div className="space-y-4">
+                        {pendingApprovals.map((action) => (
+                          <EditableConfirmationCard
+                            key={action.id}
+                            action={action}
+                            onChange={updatePendingAction}
+                            onApprove={() => approveAction(action.id)}
+                            onCancel={() => cancelAction(action.id)}
+                          />
+                        ))}
+                      </div>
+                    </DashboardPanel>
+
+                    <div className="space-y-4">
+                      <MetricCard label="Awaiting review" value={String(pendingCount)} detail="Nothing executes automatically" />
+                      <DashboardPanel title="Approval Rules">
+                        <ul className="space-y-3 text-sm leading-7 text-[#e5ddd0]">
+                          <li>• Low risk: summaries, tags, and note insights.</li>
+                          <li>• Medium risk: reminders, drafts, and extracted tasks.</li>
+                          <li>• High risk: calls and future external integrations.</li>
+                        </ul>
+                      </DashboardPanel>
+                    </div>
+                  </div>
+                </SectionPage>
+              ) : null}
+
+              {section === "assistant" ? (
+                <SectionPage eyebrow="Assistant" title="Natural language in, structured actions out." description="This workspace shows the command patterns and the running assistant feed behind the dashboard.">
+                  <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+                    <DashboardPanel title="Recent Assistant Feed">
+                      <div className="space-y-3">
+                        {assistantFeed.map((message) => (
+                          <div key={message} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-[#efe5d8]">
+                            {message}
+                          </div>
+                        ))}
+                      </div>
+                    </DashboardPanel>
+                    <DashboardPanel title="Command Patterns">
+                      <div className="space-y-3">
+                        {commandSamples.map((sample) => (
+                          <button key={sample} type="button" onClick={() => setCommand(sample)} className="w-full rounded-[1.1rem] border border-white/8 bg-white/[0.03] px-4 py-4 text-left text-sm text-[#efe7da] transition hover:border-[#a07f43]/40">
+                            {sample}
+                          </button>
+                        ))}
+                      </div>
+                    </DashboardPanel>
+                  </div>
+                </SectionPage>
+              ) : null}
+
+              {section === "reminders" ? (
+                <SectionPage eyebrow="Reminders" title="Keep commitments visible." description="Simple repeat rules, priority levels, and approval-backed AI reminders are already part of the MVP flow.">
+                  <DashboardPanel title="Active Reminders">
+                    <div className="space-y-3">
+                      {reminders.map((reminder) => (
+                        <div key={reminder.id} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-lg text-[#f5eee3]">{reminder.title}</p>
+                              <p className="mt-1 text-sm text-muted">{reminder.when}</p>
+                            </div>
+                            <StatusPill value={reminder.priority} tone={reminder.priority === "high" ? "danger" : "warning"} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </DashboardPanel>
+                </SectionPage>
+              ) : null}
+
+              {section === "calendar" ? (
+                <SectionPage eyebrow="Calendar" title="Mock schedule now, real sync later." description="The MVP keeps calendar data local first so approvals stay reliable before external integrations are added.">
+                  <DashboardPanel title="Today's Schedule">
+                    <div className="space-y-4">
+                      {scheduleItems.map((item) => (
+                        <div key={`${item.time}-${item.title}`} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
+                          <p className="text-sm uppercase tracking-[0.18em] text-[#56d3d0]">{item.time}</p>
+                          <p className="mt-2 text-xl text-[#f5eee2]">{item.title}</p>
+                          <p className="mt-1 text-sm text-muted">{item.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </DashboardPanel>
+                </SectionPage>
+              ) : null}
+
+              {section === "calls" ? (
+                <SectionPage eyebrow="Calls" title="A transparent calling assistant." description="Call plans clearly state who JARVIS is contacting, what it may ask, and what it must not do.">
+                  <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                    <DashboardPanel title="Call Queue">
+                      <div className="space-y-4">
+                        {calls.map((call) => (
+                          <div key={call.id} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xl text-[#f5ede1]">{call.contactName}</p>
+                                <p className="mt-1 text-sm text-muted">{call.purpose}</p>
+                              </div>
+                              <StatusPill value={call.status} tone={call.status === "pending" ? "warning" : "success"} />
+                            </div>
+                            <p className="mt-4 text-sm leading-7 text-[#e6ddcf]">{call.script}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </DashboardPanel>
+                    <DashboardPanel title="Latest Summary">
+                      <p className="text-sm leading-8 text-[#e9e0d3]">{calls[0]?.summary ?? "Approve a call plan to generate a transcript and summary."}</p>
+                      {calls[0]?.transcript ? (
+                        <pre className="mt-4 whitespace-pre-wrap rounded-[1rem] border border-white/8 bg-[#111719]/75 p-4 text-xs leading-7 text-[#d7d0c4]">
+                          {calls[0].transcript}
+                        </pre>
+                      ) : null}
+                    </DashboardPanel>
+                  </div>
+                </SectionPage>
+              ) : null}
+
+              {section === "notifications" ? (
+                <SectionPage eyebrow="Notifications" title="See what matters now." description="JARVIS groups mock notifications by urgency so the dashboard stays calm instead of noisy.">
+                  <DashboardPanel title="Notification Ranking">
+                    <div className="space-y-5">
+                      {initialNotifications.map((notification) => (
+                        <NotificationRow key={notification.id} notification={notification} />
+                      ))}
+                    </div>
+                  </DashboardPanel>
+                </SectionPage>
+              ) : null}
+
+              {section === "settings" ? (
+                <SectionPage eyebrow="Settings" title="Preferences and future integrations." description="This area is ready for auth preferences, integration toggles, and consent controls once the backend layer is added.">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <DashboardPanel title="Assistant Preferences">
+                      <ul className="space-y-3 text-sm leading-7 text-[#e7dfd1]">
+                        <li>• Default tone: calm and professional</li>
+                        <li>• Important actions require explicit approval</li>
+                        <li>• Simulated calls identify JARVIS clearly</li>
+                      </ul>
+                    </DashboardPanel>
+                    <DashboardPanel title="Coming Integrations">
+                      <ul className="space-y-3 text-sm leading-7 text-[#e7dfd1]">
+                        <li>• Google Calendar</li>
+                        <li>• Gmail or Outlook drafts and send approvals</li>
+                        <li>• Real outbound calls with policy-safe confirmation</li>
+                      </ul>
+                    </DashboardPanel>
+                  </div>
+                </SectionPage>
+              ) : null}
             </section>
           </div>
         </div>
       </div>
     </main>
   );
-}
-
-function renderSection({
-  section,
-  tasks,
-  notes,
-  reminders,
-  drafts,
-  calls,
-  pendingApprovals,
-  pendingCount,
-  highPriorityTasks,
-  overdueCount,
-  activeReminderCount,
-  pendingDraftCount,
-  pendingCallCount,
-  notesPreview,
-  assistantFeed,
-  approveAction,
-  cancelAction,
-}: {
-  section: NavKey;
-  tasks: Task[];
-  notes: Note[];
-  reminders: Reminder[];
-  drafts: EmailDraft[];
-  calls: CallRequest[];
-  pendingApprovals: PendingAction[];
-  pendingCount: number;
-  highPriorityTasks: Task[];
-  overdueCount: number;
-  activeReminderCount: number;
-  pendingDraftCount: number;
-  pendingCallCount: number;
-  notesPreview?: Note;
-  assistantFeed: string[];
-  approveAction: (action: PendingAction) => void;
-  cancelAction: (id: string) => void;
-}) {
-  switch (section) {
-    case "dashboard":
-      return (
-        <>
-          <div className="mt-5 grid gap-4 xl:grid-cols-[1.7fr_0.95fr]">
-            <section className="hero-panel">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="eyebrow">Today Brief</p>
-                  <h1 className="mt-5 font-display text-[3rem] leading-[1.02] text-[#ead3af] sm:text-[4rem]">
-                    Good morning, Rami.
-                  </h1>
-                  <p className="mt-4 max-w-[620px] text-xl leading-9 text-[#f0e9db]">{todayBrief}</p>
-                </div>
-                <button type="button" className="soft-outline hidden lg:inline-flex">
-                  Generate again
-                </button>
-              </div>
-
-              <div className="orbital-art" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-                <span />
-                <span />
-              </div>
-
-              <div className="mt-8 grid gap-3 md:grid-cols-4">
-                <StatChip icon={Bell} value={activeReminderCount} label="Reminders" tone="teal" />
-                <StatChip icon={Clock3} value={overdueCount} label="Overdue Task" tone="rose" />
-                <StatChip icon={Mail} value={pendingDraftCount} label="Email Draft" tone="gold" />
-                <StatChip icon={PhoneCall} value={pendingCallCount} label="Call Request" tone="teal" />
-              </div>
-            </section>
-
-            <section className="feature-panel">
-              <div className="mb-6 flex items-center justify-between">
-                <p className="eyebrow">Schedule</p>
-                <Link href="/calendar" className="panel-link">
-                  View Calendar
-                </Link>
-              </div>
-
-              <div className="space-y-6">
-                {scheduleItems.map((item, index) => (
-                  <div key={`${item.time}-${item.title}`} className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <span className="h-3 w-3 rounded-full border border-white/90 bg-transparent" />
-                      {index < scheduleItems.length - 1 ? <span className="mt-2 h-full w-px bg-white/10" /> : null}
-                    </div>
-                    <div className="min-w-[78px] text-sm text-[#e3ddd0]">{item.time}</div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={clsx(
-                            "h-2.5 w-2.5 rounded-full",
-                            item.tone === "teal" ? "bg-[#56d3d0]" : "bg-[#ddb26f]",
-                          )}
-                        />
-                        <p className="text-xl text-[#f5efe4]">{item.title}</p>
-                      </div>
-                      <p className="mt-1 text-sm text-muted">{item.detail}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          <div className="mt-4 grid gap-4 xl:grid-cols-3">
-            <DashboardPanel title="Priority Tasks" actionLabel="View all" href="/tasks">
-              <div className="space-y-4">
-                {tasks.slice(0, 4).map((task) => (
-                  <TaskRow key={task.id} task={task} />
-                ))}
-              </div>
-            </DashboardPanel>
-
-            <DashboardPanel title="Confirmations Queue" actionLabel={`View all (${pendingApprovals.length})`} href="/confirmations">
-              <div className="space-y-3">
-                {pendingApprovals.slice(0, 4).map((action) => (
-                  <ConfirmationRow
-                    key={action.id}
-                    action={action}
-                    onApprove={() => approveAction(action)}
-                    onCancel={() => cancelAction(action.id)}
-                  />
-                ))}
-              </div>
-            </DashboardPanel>
-
-            <DashboardPanel title="Notifications Intelligence" actionLabel="View all" href="/notifications">
-              <div className="space-y-4">
-                {initialNotifications.map((notification) => (
-                  <NotificationRow key={notification.id} notification={notification} />
-                ))}
-              </div>
-            </DashboardPanel>
-          </div>
-
-          <div className="mt-4 grid gap-4 xl:grid-cols-3">
-            <DashboardPanel title="Notes Preview" actionLabel="Open notes" href="/notes">
-              {notesPreview ? (
-                <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-5">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xl text-[#f6f0e4]">{notesPreview.title}</p>
-                      <p className="mt-1 text-sm text-muted">Today, 9:40 AM</p>
-                    </div>
-                    <button type="button" className="text-muted">
-                      •••
-                    </button>
-                  </div>
-
-                  <div className="mt-4 flex gap-2">
-                    {notesPreview.tags.map((tag) => (
-                      <span key={tag} className="rounded-xl bg-white/8 px-3 py-1 text-sm text-[#ece5d8]">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-
-                  <ul className="mt-4 space-y-2 text-sm leading-7 text-[#d8d3c7]">
-                    {notesPreview.content
-                      .replace("Messy notes:", "")
-                      .split(",")
-                      .slice(0, 3)
-                      .map((line) => (
-                        <li key={line}>• {line.trim()}</li>
-                      ))}
-                  </ul>
-                </div>
-              ) : null}
-            </DashboardPanel>
-
-            <DashboardPanel title="Call Assistant" actionLabel="View calls" href="/calls">
-              <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[radial-gradient(circle,_rgba(86,211,208,0.25),_rgba(86,211,208,0.08))] text-[#61ddd5]">
-                      <PhoneCall className="h-7 w-7" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted">Pending Call Plan</p>
-                      <p className="mt-1 text-[2rem] leading-none text-[#f3ebde]">{calls[0]?.contactName ?? "Campus Gym"}</p>
-                      <p className="mt-2 text-sm text-[#ded7ca]">{calls[0]?.purpose ?? "Ask if basketball court is free tonight"}</p>
-                    </div>
-                  </div>
-                  <StatusPill value="high" tone="danger" />
-                </div>
-
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <Link href="/calls" className="soft-outline">
-                    Review Plan
-                  </Link>
-                  <button
-                    type="button"
-                    className="jarvis-button"
-                    onClick={() => {
-                      const pendingCall = pendingApprovals.find((action) => action.type === "place_call");
-                      if (pendingCall) {
-                        approveAction(pendingCall);
-                      }
-                    }}
-                  >
-                    Approve Call
-                  </button>
-                </div>
-              </div>
-            </DashboardPanel>
-
-            <DashboardPanel title="AI Suggestions" actionLabel="Open assistant" href="/assistant">
-              <div className="space-y-3">
-                {suggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    className="flex w-full items-center justify-between rounded-[1.1rem] border border-white/8 bg-white/[0.03] px-4 py-4 text-left transition hover:border-[#a07f43]/40"
-                  >
-                    <span className="flex items-center gap-3 text-[#efe7da]">
-                      <Sparkles className="h-4 w-4 text-[#56d3d0]" />
-                      <span>{suggestion}</span>
-                    </span>
-                    <ChevronRight className="h-4 w-4 text-muted" />
-                  </button>
-                ))}
-              </div>
-            </DashboardPanel>
-          </div>
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-3">
-            <MetricCard label="Open approvals" value={String(pendingCount)} detail="Transparent action queue" />
-            <MetricCard label="Priority tasks" value={String(highPriorityTasks.length)} detail="Focused for today" />
-            <MetricCard
-              label="Simulated calls"
-              value={String(calls.filter((call) => call.status === "simulated").length)}
-              detail="Ready for follow-up"
-            />
-          </div>
-
-          <div className="mt-4 feature-panel">
-            <div className="mb-4 flex items-center justify-between">
-              <p className="eyebrow">Assistant Feed</p>
-              <Link href="/assistant" className="panel-link">
-                Open Assistant
-              </Link>
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2">
-              {assistantFeed.slice(0, 4).map((message) => (
-                <div key={message} className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-[#e8e0d4]">
-                  {message}
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      );
-    case "tasks":
-      return (
-        <SectionPage
-          eyebrow="Task Center"
-          title="Real task workflows, not just a preview card."
-          description="Filter your work, spot overdue items fast, and keep AI-generated tasks separate until you approve them."
-        >
-          <div className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
-            <DashboardPanel title="All Tasks">
-              <div className="mb-5 flex flex-wrap gap-2">
-                {["Today", "Upcoming", "Overdue", "Completed"].map((label) => (
-                  <button key={label} type="button" className="small-action">
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="space-y-4">
-                {tasks.map((task) => (
-                  <TaskRow key={task.id} task={task} />
-                ))}
-              </div>
-            </DashboardPanel>
-
-            <div className="space-y-4">
-              <MetricCard label="High priority" value={String(highPriorityTasks.length)} detail="Needs focus first" />
-              <MetricCard label="Overdue" value={String(overdueCount)} detail="Worth clearing today" />
-              <DashboardPanel title="Suggested Next Move">
-                <p className="text-sm leading-7 text-[#e7dfd1]">
-                  Convert the research note into approved tasks, then block time after your 3 PM meeting to finish the outline.
-                </p>
-              </DashboardPanel>
-            </div>
-          </div>
-        </SectionPage>
-      );
-    case "notes":
-      return (
-        <SectionPage
-          eyebrow="Notes Workspace"
-          title="Capture rough thoughts, then let JARVIS structure them."
-          description="Each note can be summarized, tagged, and turned into tasks or reminders through the confirmation flow."
-        >
-          <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-            <DashboardPanel title="Note Library">
-              <div className="space-y-3">
-                {notes.map((note) => (
-                  <button
-                    key={note.id}
-                    type="button"
-                    className="w-full rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-4 text-left transition hover:border-[#a07f43]/40"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-lg text-[#f7efe3]">{note.title}</p>
-                      <span className="text-xs uppercase tracking-[0.2em] text-[#56d3d0]">{note.tags[0]}</span>
-                    </div>
-                    <p className="mt-2 text-sm leading-7 text-[#d8d2c7]">{note.summary}</p>
-                  </button>
-                ))}
-              </div>
-            </DashboardPanel>
-
-            <DashboardPanel title={notesPreview?.title ?? "Selected Note"}>
-              {notesPreview ? (
-                <div className="space-y-5">
-                  <div className="flex flex-wrap gap-2">
-                    {notesPreview.tags.map((tag) => (
-                      <span key={tag} className="rounded-full border border-white/8 px-3 py-1 text-sm text-[#efe6d7]">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="rounded-[1.15rem] border border-white/8 bg-[#111719]/75 p-5 text-sm leading-8 text-[#e8dfd2]">
-                    {notesPreview.content}
-                  </p>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <button type="button" className="soft-outline">
-                      Summarize
-                    </button>
-                    <button type="button" className="soft-outline">
-                      Suggest Tags
-                    </button>
-                    <button type="button" className="jarvis-button">
-                      Extract Tasks
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </DashboardPanel>
-          </div>
-        </SectionPage>
-      );
-    case "confirmations":
-      return (
-        <SectionPage
-          eyebrow="Approval Center"
-          title="Important actions stay transparent."
-          description="Every email draft, reminder, extracted task, and call request waits here until you review it."
-        >
-          <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-            <DashboardPanel title={`Pending Actions (${pendingApprovals.length})`}>
-              <div className="space-y-3">
-                {pendingApprovals.map((action) => (
-                  <ConfirmationRow
-                    key={action.id}
-                    action={action}
-                    onApprove={() => approveAction(action)}
-                    onCancel={() => cancelAction(action.id)}
-                  />
-                ))}
-              </div>
-            </DashboardPanel>
-
-            <div className="space-y-4">
-              <MetricCard label="Awaiting review" value={String(pendingCount)} detail="Nothing executes automatically" />
-              <DashboardPanel title="Approval Rules">
-                <ul className="space-y-3 text-sm leading-7 text-[#e5ddd0]">
-                  <li>• Low risk: summaries, tags, and note insights.</li>
-                  <li>• Medium risk: reminders, drafts, and extracted tasks.</li>
-                  <li>• High risk: calls and future external integrations.</li>
-                </ul>
-              </DashboardPanel>
-            </div>
-          </div>
-        </SectionPage>
-      );
-    case "assistant":
-      return (
-        <SectionPage
-          eyebrow="Assistant"
-          title="Natural language in, structured actions out."
-          description="This workspace will become the main AI command center. For the MVP, it already prepares reminders, email drafts, note actions, and call plans."
-        >
-          <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-            <DashboardPanel title="Recent Assistant Feed">
-              <div className="space-y-3">
-                {assistantFeed.map((message) => (
-                  <div key={message} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-[#efe5d8]">
-                    {message}
-                  </div>
-                ))}
-              </div>
-            </DashboardPanel>
-            <DashboardPanel title="Command Patterns">
-              <div className="space-y-3">
-                {commandSamples.map((sample) => (
-                  <button
-                    key={sample}
-                    type="button"
-                    className="w-full rounded-[1.1rem] border border-white/8 bg-white/[0.03] px-4 py-4 text-left text-sm text-[#efe7da] transition hover:border-[#a07f43]/40"
-                  >
-                    {sample}
-                  </button>
-                ))}
-              </div>
-            </DashboardPanel>
-          </div>
-        </SectionPage>
-      );
-    case "reminders":
-      return (
-        <SectionPage eyebrow="Reminders" title="Keep commitments visible." description="Simple repeat rules, priority levels, and approval-backed AI reminders are already part of the MVP direction.">
-          <DashboardPanel title="Active Reminders">
-            <div className="space-y-3">
-              {reminders.map((reminder) => (
-                <div key={reminder.id} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-lg text-[#f5eee3]">{reminder.title}</p>
-                      <p className="mt-1 text-sm text-muted">{reminder.when}</p>
-                    </div>
-                    <StatusPill value={reminder.priority} tone={reminder.priority === "high" ? "danger" : "warning"} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </DashboardPanel>
-        </SectionPage>
-      );
-    case "calendar":
-      return (
-        <SectionPage eyebrow="Calendar" title="Mock schedule now, real sync later." description="The MVP keeps calendar data local first so the confirmation flow stays reliable before external integrations are added.">
-          <DashboardPanel title="Today's Schedule">
-            <div className="space-y-4">
-              {scheduleItems.map((item) => (
-                <div key={`${item.time}-${item.title}`} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
-                  <p className="text-sm uppercase tracking-[0.18em] text-[#56d3d0]">{item.time}</p>
-                  <p className="mt-2 text-xl text-[#f5eee2]">{item.title}</p>
-                  <p className="mt-1 text-sm text-muted">{item.detail}</p>
-                </div>
-              ))}
-            </div>
-          </DashboardPanel>
-        </SectionPage>
-      );
-    case "calls":
-      return (
-        <SectionPage eyebrow="Calls" title="A transparent calling assistant." description="Call plans clearly state who JARVIS is contacting, what it may ask, and what it must not do.">
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <DashboardPanel title="Call Queue">
-              <div className="space-y-4">
-                {calls.map((call) => (
-                  <div key={call.id} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xl text-[#f5ede1]">{call.contactName}</p>
-                        <p className="mt-1 text-sm text-muted">{call.purpose}</p>
-                      </div>
-                      <StatusPill value={call.status} tone={call.status === "pending" ? "warning" : "success"} />
-                    </div>
-                    <p className="mt-4 text-sm leading-7 text-[#e6ddcf]">{call.script}</p>
-                  </div>
-                ))}
-              </div>
-            </DashboardPanel>
-            <DashboardPanel title="Latest Summary">
-              <p className="text-sm leading-8 text-[#e9e0d3]">{calls[0]?.summary ?? "Approve a call plan to generate a transcript and summary."}</p>
-              {calls[0]?.transcript ? (
-                <pre className="mt-4 overflow-x-auto rounded-[1rem] border border-white/8 bg-[#111719]/75 p-4 text-xs leading-7 text-[#d7d0c4] whitespace-pre-wrap">
-                  {calls[0].transcript}
-                </pre>
-              ) : null}
-            </DashboardPanel>
-          </div>
-        </SectionPage>
-      );
-    case "notifications":
-      return (
-        <SectionPage eyebrow="Notifications" title="See what matters now." description="JARVIS can group mock notifications by urgency so the dashboard stays calm instead of noisy.">
-          <DashboardPanel title="Notification Ranking">
-            <div className="space-y-5">
-              {initialNotifications.map((notification) => (
-                <NotificationRow key={notification.id} notification={notification} />
-              ))}
-            </div>
-          </DashboardPanel>
-        </SectionPage>
-      );
-    case "settings":
-      return (
-        <SectionPage eyebrow="Settings" title="Preferences and future integrations." description="This area is ready for auth preferences, integration toggles, and consent controls once the backend layer is added.">
-          <div className="grid gap-4 md:grid-cols-2">
-            <DashboardPanel title="Assistant Preferences">
-              <ul className="space-y-3 text-sm leading-7 text-[#e7dfd1]">
-                <li>• Default tone: calm and professional</li>
-                <li>• Important actions require explicit approval</li>
-                <li>• Simulated calls identify JARVIS clearly</li>
-              </ul>
-            </DashboardPanel>
-            <DashboardPanel title="Coming Integrations">
-              <ul className="space-y-3 text-sm leading-7 text-[#e7dfd1]">
-                <li>• Google Calendar</li>
-                <li>• Gmail or Outlook drafts and send approvals</li>
-                <li>• Real outbound calls with policy-safe confirmation</li>
-              </ul>
-            </DashboardPanel>
-          </div>
-        </SectionPage>
-      );
-    default:
-      return null;
-  }
 }
 
 function TopCommandBar({
@@ -917,12 +690,7 @@ function TopCommandBar({
           <p className="text-base text-[#e9e1d5]">What would you like JARVIS to do?</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {commandSamples.slice(0, 2).map((sample) => (
-              <button
-                key={sample}
-                type="button"
-                onClick={() => setCommand(sample)}
-                className="rounded-full border border-white/8 px-3 py-1.5 text-sm text-muted transition hover:border-[#a07f43]/45 hover:text-[#efe8da]"
-              >
+              <button key={sample} type="button" onClick={() => setCommand(sample)} className="rounded-full border border-white/8 px-3 py-1.5 text-sm text-muted transition hover:border-[#a07f43]/45 hover:text-[#efe8da]">
                 {sample}
               </button>
             ))}
@@ -1017,10 +785,20 @@ function DashboardPanel({
   );
 }
 
-function TaskRow({ task }: { task: Task }) {
+function TaskRow({
+  task,
+  onToggle,
+  onDelete,
+}: {
+  task: Task;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
   return (
     <div className="flex items-start gap-4 border-b border-white/8 pb-4 last:border-b-0 last:pb-0">
-      <div
+      <button
+        type="button"
+        onClick={onToggle}
         className={clsx(
           "mt-1 grid h-5 w-5 place-items-center rounded-full border",
           task.status === "done"
@@ -1031,7 +809,7 @@ function TaskRow({ task }: { task: Task }) {
         )}
       >
         {task.status === "done" ? <Check className="h-4 w-4 text-[#071014]" /> : null}
-      </div>
+      </button>
       <div className="flex-1">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -1039,12 +817,51 @@ function TaskRow({ task }: { task: Task }) {
             <p className="mt-1 text-sm text-muted">{task.due}</p>
             {task.description ? <p className="mt-2 text-sm leading-6 text-[#d8d1c5]">{task.description}</p> : null}
           </div>
-          <StatusPill
-            value={task.status === "overdue" ? "overdue" : task.priority}
-            tone={task.status === "overdue" ? "danger" : task.priority === "medium" ? "warning" : "neutral"}
-          />
+          <div className="flex items-center gap-2">
+            <StatusPill
+              value={task.status === "overdue" ? "overdue" : task.priority}
+              tone={task.status === "overdue" ? "danger" : task.priority === "medium" ? "warning" : "neutral"}
+            />
+            <button type="button" onClick={onDelete} className="icon-chip h-10 w-10">
+              <Trash2 className="h-4 w-4 text-[#d6cec0]" />
+            </button>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function NotePreviewCard({ note }: { note: Note }) {
+  return (
+    <div className="rounded-[1.2rem] border border-white/8 bg-white/[0.03] p-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xl text-[#f6f0e4]">{note.title}</p>
+          <p className="mt-1 text-sm text-muted">Recently updated</p>
+        </div>
+        <button type="button" className="text-muted">
+          •••
+        </button>
+      </div>
+
+      <div className="mt-4 flex gap-2">
+        {note.tags.map((tag) => (
+          <span key={tag} className="rounded-xl bg-white/8 px-3 py-1 text-sm text-[#ece5d8]">
+            {tag}
+          </span>
+        ))}
+      </div>
+
+      <ul className="mt-4 space-y-2 text-sm leading-7 text-[#d8d3c7]">
+        {note.content
+          .replace("Messy notes:", "")
+          .split(",")
+          .slice(0, 3)
+          .map((line) => (
+            <li key={line}>• {line.trim()}</li>
+          ))}
+      </ul>
     </div>
   );
 }
@@ -1087,37 +904,17 @@ function ConfirmationRow({
   onApprove: () => void;
   onCancel: () => void;
 }) {
-  const toneClass =
-    action.type === "draft_email"
-      ? "bg-[#2d4269] text-[#d9e4ff]"
-      : action.type === "create_reminder"
-        ? "bg-[#2b5a51] text-[#ccefe8]"
-        : action.type === "place_call"
-          ? "bg-[#5a4166] text-[#eadbff]"
-          : "bg-[#6a4e2a] text-[#f6e2bc]";
-
   return (
     <div className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-3.5">
       <div className="flex items-start gap-3">
-        <div className={clsx("mt-0.5 rounded-[0.8rem] px-3 py-2 text-sm", toneClass)}>
-          {action.type === "draft_email"
-            ? "✉"
-            : action.type === "create_reminder"
-              ? "□"
-              : action.type === "place_call"
-                ? "◔"
-                : "✓"}
-        </div>
+        <div className={clsx("mt-0.5 rounded-[0.8rem] px-3 py-2 text-sm", iconToneClass(action.type))}>{iconSymbol(action.type)}</div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-base text-[#f4eee3]">{action.title}</p>
               <p className="mt-1 text-sm text-muted">{action.description}</p>
             </div>
-            <StatusPill
-              value={action.risk}
-              tone={action.risk === "high" ? "danger" : action.risk === "medium" ? "warning" : "success"}
-            />
+            <StatusPill value={action.risk} tone={action.risk === "high" ? "danger" : action.risk === "medium" ? "warning" : "success"} />
           </div>
           <div className="mt-3 flex gap-2">
             <button type="button" onClick={onApprove} className="small-action primary">
@@ -1131,6 +928,96 @@ function ConfirmationRow({
       </div>
     </div>
   );
+}
+
+function EditableConfirmationCard({
+  action,
+  onChange,
+  onApprove,
+  onCancel,
+}: {
+  action: PendingAction;
+  onChange: (actionId: string, updates: Partial<PendingAction>) => void;
+  onApprove: () => void;
+  onCancel: () => void;
+}) {
+  const taskList = Array.isArray(action.payload.tasks) ? action.payload.tasks.map((item) => String(item)).join("\n") : "";
+
+  return (
+    <div className="rounded-[1.25rem] border border-white/8 bg-white/[0.03] p-4">
+      <div className="flex items-start gap-3">
+        <div className={clsx("mt-0.5 rounded-[0.8rem] px-3 py-2 text-sm", iconToneClass(action.type))}>{iconSymbol(action.type)}</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <input value={action.title} onChange={(e) => onChange(action.id, { title: e.target.value })} className="field-input" />
+              <textarea value={action.description} onChange={(e) => onChange(action.id, { description: e.target.value })} className="field-input mt-3 min-h-20" />
+            </div>
+            <StatusPill value={action.risk} tone={action.risk === "high" ? "danger" : action.risk === "medium" ? "warning" : "success"} />
+          </div>
+
+          {action.type === "create_reminder" ? (
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <input value={String(action.payload.title ?? "")} onChange={(e) => onChange(action.id, { payload: { title: e.target.value } })} placeholder="Reminder title" className="field-input" />
+              <input value={String(action.payload.when ?? "")} onChange={(e) => onChange(action.id, { payload: { when: e.target.value } })} placeholder="When" className="field-input" />
+            </div>
+          ) : null}
+
+          {action.type === "create_tasks_from_note" ? (
+            <textarea
+              value={taskList}
+              onChange={(e) =>
+                onChange(action.id, {
+                  payload: {
+                    tasks: e.target.value
+                      .split("\n")
+                      .map((item) => item.trim())
+                      .filter(Boolean),
+                  },
+                })
+              }
+              className="field-input mt-3 min-h-32"
+            />
+          ) : null}
+
+          <div className="mt-4 flex gap-2">
+            <button type="button" onClick={onApprove} className="small-action primary">
+              Approve
+            </button>
+            <button type="button" onClick={onCancel} className="small-action">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function iconToneClass(type: PendingAction["type"]) {
+  if (type === "draft_email") {
+    return "bg-[#2d4269] text-[#d9e4ff]";
+  }
+  if (type === "create_reminder") {
+    return "bg-[#2b5a51] text-[#ccefe8]";
+  }
+  if (type === "place_call") {
+    return "bg-[#5a4166] text-[#eadbff]";
+  }
+  return "bg-[#6a4e2a] text-[#f6e2bc]";
+}
+
+function iconSymbol(type: PendingAction["type"]) {
+  if (type === "draft_email") {
+    return "✉";
+  }
+  if (type === "create_reminder") {
+    return "□";
+  }
+  if (type === "place_call") {
+    return "◔";
+  }
+  return "✓";
 }
 
 function NotificationRow({ notification }: { notification: NotificationItem }) {
@@ -1151,10 +1038,7 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
             <p className="text-xl text-[#f6f0e4]">{notification.source}</p>
             <p className="mt-1 text-sm text-[#d8d2c7]">{notification.body}</p>
           </div>
-          <StatusPill
-            value={notification.category}
-            tone={notification.category === "urgent" ? "danger" : notification.category === "important" ? "warning" : "neutral"}
-          />
+          <StatusPill value={notification.category} tone={notification.category === "urgent" ? "danger" : notification.category === "important" ? "warning" : "neutral"} />
         </div>
       </div>
     </div>
