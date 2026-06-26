@@ -98,6 +98,7 @@ export type JarvisStateSnapshot = {
 };
 
 export type JarvisMutationRequest =
+  | { type: "reset_state" }
   | { type: "submit_command"; input: string }
   | { type: "approve_action"; actionId: string }
   | { type: "cancel_action"; actionId: string }

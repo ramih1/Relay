@@ -1,3 +1,5 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   initialCalls,
   initialEmailDrafts,
@@ -17,6 +19,9 @@ import type {
   Task,
 } from "@/lib/types";
 
+const DATA_DIR = path.join(process.cwd(), "data");
+const STATE_FILE = path.join(DATA_DIR, "jarvis-state.json");
+
 function createInitialState(): JarvisStateSnapshot {
   return {
     tasks: structuredClone(initialTasks),
@@ -31,17 +36,42 @@ function createInitialState(): JarvisStateSnapshot {
   };
 }
 
-let state: JarvisStateSnapshot = createInitialState();
+let inMemoryState: JarvisStateSnapshot | null = null;
 
-function appendFeed(message: string) {
+async function ensureDataDir() {
+  await mkdir(DATA_DIR, { recursive: true });
+}
+
+async function persistState(state: JarvisStateSnapshot) {
+  await ensureDataDir();
+  await writeFile(STATE_FILE, JSON.stringify(state, null, 2), "utf8");
+}
+
+async function loadState(): Promise<JarvisStateSnapshot> {
+  if (inMemoryState) {
+    return inMemoryState;
+  }
+
+  try {
+    const raw = await readFile(STATE_FILE, "utf8");
+    inMemoryState = JSON.parse(raw) as JarvisStateSnapshot;
+  } catch {
+    inMemoryState = createInitialState();
+    await persistState(inMemoryState);
+  }
+
+  return inMemoryState;
+}
+
+function appendFeed(state: JarvisStateSnapshot, message: string) {
   state.assistantFeed = [message, ...state.assistantFeed];
 }
 
-function updateNote(noteId: string, updates: Partial<Note>) {
+function updateNote(state: JarvisStateSnapshot, noteId: string, updates: Partial<Note>) {
   state.notes = state.notes.map((note) => (note.id === noteId ? { ...note, ...updates } : note));
 }
 
-function submitCommand(rawInput: string) {
+function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
   const input = rawInput.trim();
   if (!input) {
     return;
@@ -65,7 +95,7 @@ function submitCommand(rawInput: string) {
       },
     };
     state.pendingActions = [newAction, ...state.pendingActions];
-    appendFeed(`Prepared a reminder proposal for "${input}". It is waiting in Confirmations.`);
+    appendFeed(state, `Prepared a reminder proposal for "${input}". It is waiting in Confirmations.`);
     return;
   }
 
@@ -91,7 +121,7 @@ function submitCommand(rawInput: string) {
     };
     state.drafts = [newDraft, ...state.drafts];
     state.pendingActions = [newAction, ...state.pendingActions];
-    appendFeed("Drafted an email request and queued it for approval before saving.");
+    appendFeed(state, "Drafted an email request and queued it for approval before saving.");
     return;
   }
 
@@ -119,7 +149,7 @@ function submitCommand(rawInput: string) {
     };
     state.calls = [newCall, ...state.calls];
     state.pendingActions = [newAction, ...state.pendingActions];
-    appendFeed("Created a transparent call plan with a script and allowed actions. It is waiting for approval.");
+    appendFeed(state, "Created a transparent call plan with a script and allowed actions. It is waiting for approval.");
     return;
   }
 
@@ -140,14 +170,14 @@ function submitCommand(rawInput: string) {
       },
     };
     state.pendingActions = [newAction, ...state.pendingActions];
-    appendFeed("Extracted action items from your note and sent them to Confirmations for review.");
+    appendFeed(state, "Extracted action items from your note and sent them to Confirmations for review.");
     return;
   }
 
-  appendFeed("I understood the request at a high level and would ask one focused follow-up before creating an action proposal in the real agent flow.");
+  appendFeed(state, "I understood the request at a high level and would ask one focused follow-up before creating an action proposal in the real agent flow.");
 }
 
-function approveAction(actionId: string) {
+function approveAction(state: JarvisStateSnapshot, actionId: string) {
   const action = state.pendingActions.find((item) => item.id === actionId);
   if (!action || action.status !== "pending") {
     return;
@@ -237,13 +267,13 @@ function approveAction(actionId: string) {
   );
 }
 
-function cancelAction(actionId: string) {
+function cancelAction(state: JarvisStateSnapshot, actionId: string) {
   state.pendingActions = state.pendingActions.map((item) =>
     item.id === actionId ? { ...item, status: "cancelled" } : item,
   );
 }
 
-function updatePendingAction(actionId: string, updates: Partial<PendingAction>) {
+function updatePendingAction(state: JarvisStateSnapshot, actionId: string, updates: Partial<PendingAction>) {
   state.pendingActions = state.pendingActions.map((item) =>
     item.id === actionId
       ? {
@@ -258,27 +288,35 @@ function updatePendingAction(actionId: string, updates: Partial<PendingAction>) 
   );
 }
 
-export function getJarvisState(): JarvisStateSnapshot {
-  return structuredClone(state);
+export async function getJarvisState(): Promise<JarvisStateSnapshot> {
+  return structuredClone(await loadState());
 }
 
-export function resetJarvisState() {
-  state = createInitialState();
+export async function resetJarvisState() {
+  inMemoryState = createInitialState();
+  await persistState(inMemoryState);
+  return getJarvisState();
 }
 
-export function applyJarvisMutation(input: JarvisMutationRequest): JarvisStateSnapshot {
+export async function applyJarvisMutation(input: JarvisMutationRequest): Promise<JarvisStateSnapshot> {
+  const state = await loadState();
+
   switch (input.type) {
+    case "reset_state":
+      inMemoryState = createInitialState();
+      await persistState(inMemoryState);
+      return getJarvisState();
     case "submit_command":
-      submitCommand(input.input);
+      submitCommand(state, input.input);
       break;
     case "approve_action":
-      approveAction(input.actionId);
+      approveAction(state, input.actionId);
       break;
     case "cancel_action":
-      cancelAction(input.actionId);
+      cancelAction(state, input.actionId);
       break;
     case "update_pending_action":
-      updatePendingAction(input.actionId, input.updates);
+      updatePendingAction(state, input.actionId, input.updates);
       break;
     case "add_task":
       state.tasks = [
@@ -292,7 +330,7 @@ export function applyJarvisMutation(input: JarvisMutationRequest): JarvisStateSn
         },
         ...state.tasks,
       ];
-      appendFeed(`Added a new task: ${input.input.title}.`);
+      appendFeed(state, `Added a new task: ${input.input.title}.`);
       break;
     case "toggle_task":
       state.tasks = state.tasks.map((task) =>
@@ -315,7 +353,7 @@ export function applyJarvisMutation(input: JarvisMutationRequest): JarvisStateSn
         },
         ...state.notes,
       ];
-      appendFeed(`Saved a new note: ${input.input.title}.`);
+      appendFeed(state, `Saved a new note: ${input.input.title}.`);
       break;
     }
     case "delete_note":
@@ -336,8 +374,8 @@ export function applyJarvisMutation(input: JarvisMutationRequest): JarvisStateSn
             : target.content.length > 140
               ? `${target.content.slice(0, 137)}...`
               : target.content;
-        updateNote(input.noteId, { summary });
-        appendFeed(`Summarized note: ${target.title}.`);
+        updateNote(state, input.noteId, { summary });
+        appendFeed(state, `Summarized note: ${target.title}.`);
       }
       break;
     }
@@ -351,8 +389,8 @@ export function applyJarvisMutation(input: JarvisMutationRequest): JarvisStateSn
         if (/(email|team|meeting|internship|work)/.test(lower)) nextTags.add("work");
         if (/(laundry|apartment|errand|parcel|budget)/.test(lower)) nextTags.add("life");
         if (nextTags.size === 0) nextTags.add("general");
-        updateNote(input.noteId, { tags: Array.from(nextTags) });
-        appendFeed(`Suggested tags for note: ${target.title}.`);
+        updateNote(state, input.noteId, { tags: Array.from(nextTags) });
+        appendFeed(state, `Suggested tags for note: ${target.title}.`);
       }
       break;
     }
@@ -368,7 +406,7 @@ export function applyJarvisMutation(input: JarvisMutationRequest): JarvisStateSn
         },
         ...state.reminders,
       ];
-      appendFeed(`Added a reminder: ${input.input.title}.`);
+      appendFeed(state, `Added a reminder: ${input.input.title}.`);
       break;
     case "update_reminder":
       state.reminders = state.reminders.map((reminder) =>
@@ -402,11 +440,13 @@ export function applyJarvisMutation(input: JarvisMutationRequest): JarvisStateSn
           },
         };
         state.pendingActions = [newAction, ...state.pendingActions];
-        appendFeed(`Prepared a follow-up reminder based on the ${call.contactName} call summary.`);
+        appendFeed(state, `Prepared a follow-up reminder based on the ${call.contactName} call summary.`);
       }
       break;
     }
   }
 
+  inMemoryState = state;
+  await persistState(state);
   return getJarvisState();
 }

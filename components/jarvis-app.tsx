@@ -113,6 +113,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     summarizeNote,
     suggestNoteTags,
     createCallFollowups,
+    resetState,
   } = useJarvis();
 
   const [command, setCommand] = useState("");
@@ -1171,6 +1172,30 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <li>• Gmail or Outlook drafts and send approvals</li>
                         <li>• Real outbound calls with policy-safe confirmation</li>
                       </ul>
+                    </DashboardPanel>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
+                    <DashboardPanel title="Backend State">
+                      <div className="space-y-4">
+                        <p className="copy-strong text-sm leading-7">
+                          JARVIS now keeps its workspace state through the server layer instead of relying only on browser-local memory. That means tasks, reminders, drafts, calls, and approvals persist in the project runtime itself.
+                        </p>
+                        <div className="grid gap-3 md:grid-cols-3">
+                          <TaskInsightCard label="Tasks" value={String(tasks.length)} detail="Server-backed records" />
+                          <TaskInsightCard label="Approvals" value={String(pendingActions.length)} detail="Tracked through API" />
+                          <TaskInsightCard label="Calls" value={String(calls.length)} detail="Stored with summaries" />
+                        </div>
+                      </div>
+                    </DashboardPanel>
+                    <DashboardPanel title="Demo Controls">
+                      <div className="space-y-4">
+                        <p className="copy-soft text-sm leading-7">
+                          Reset the workspace back to the seeded demo dataset whenever you want a clean walkthrough for testing or presenting.
+                        </p>
+                        <button type="button" className="jarvis-button" onClick={() => void resetState()}>
+                          Restore Demo Workspace
+                        </button>
+                      </div>
                     </DashboardPanel>
                   </div>
                   <div className="mt-4">

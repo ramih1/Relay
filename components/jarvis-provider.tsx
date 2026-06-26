@@ -64,6 +64,7 @@ type JarvisStore = {
   summarizeNote: (noteId: string) => Promise<void>;
   suggestNoteTags: (noteId: string) => Promise<void>;
   createCallFollowups: (callId: string) => Promise<void>;
+  resetState: () => Promise<void>;
 };
 
 const fallbackState: JarvisStateSnapshot = {
@@ -153,6 +154,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       summarizeNote: async (noteId) => mutate({ type: "summarize_note", noteId }),
       suggestNoteTags: async (noteId) => mutate({ type: "suggest_note_tags", noteId }),
       createCallFollowups: async (callId) => mutate({ type: "create_call_followups", callId }),
+      resetState: async () => mutate({ type: "reset_state" }),
     }),
     [state],
   );
