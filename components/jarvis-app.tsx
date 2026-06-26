@@ -82,6 +82,10 @@ const activityToneMap = {
   draft: "neutral",
   active: "neutral",
 } as const;
+const taskFilterOptions = ["all", "today", "upcoming", "overdue", "completed"] as const;
+type TaskFilter = (typeof taskFilterOptions)[number];
+const reminderFilterOptions = ["all", "active", "snoozed", "done"] as const;
+type ReminderFilter = (typeof reminderFilterOptions)[number];
 
 export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const {
@@ -124,6 +128,12 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const [selectedDraftId, setSelectedDraftId] = useState<string>(drafts[0]?.id ?? "");
   const [confirmationTab, setConfirmationTab] = useState<ConfirmationTab>("pending");
   const [theme, setTheme] = useState<ThemeName>("carbon");
+  const [taskFilter, setTaskFilter] = useState<TaskFilter>("all");
+  const [taskQuery, setTaskQuery] = useState("");
+  const [noteQuery, setNoteQuery] = useState("");
+  const [noteTagFilter, setNoteTagFilter] = useState("all");
+  const [reminderFilter, setReminderFilter] = useState<ReminderFilter>("all");
+  const [reminderQuery, setReminderQuery] = useState("");
 
   const pendingApprovals = pendingActions.filter((item) => item.status === "pending");
   const pendingCount = pendingApprovals.length;
@@ -155,6 +165,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   );
 
   const activeConfirmationList = confirmationGroups[confirmationTab];
+  const noteTags = useMemo(
+    () => ["all", ...new Set(notes.flatMap((note) => note.tags))],
+    [notes],
+  );
   const recentActivity = useMemo(
     () =>
       [
@@ -223,6 +237,68 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     const rest = lines.slice(1);
     return rest.length > 0 ? `${first}, and ${rest.join(", ")}.` : `${first}.`;
   }, [activeReminderCount, overdueCount, pendingCount, pendingDraftCount, pendingCallCount]);
+
+  const taskGroups = useMemo(
+    () => ({
+      all: tasks,
+      today: filteredTaskGroups.today,
+      upcoming: filteredTaskGroups.upcoming,
+      overdue: filteredTaskGroups.overdue,
+      completed: filteredTaskGroups.completed,
+    }),
+    [filteredTaskGroups, tasks],
+  );
+
+  const visibleTasks = useMemo(() => {
+    const scoped = taskFilter === "all" ? tasks : taskGroups[taskFilter];
+    const query = taskQuery.trim().toLowerCase();
+    if (!query) {
+      return scoped;
+    }
+
+    return scoped.filter((task) =>
+      [task.title, task.description ?? "", task.due, task.priority, task.status].some((value) =>
+        value.toLowerCase().includes(query),
+      ),
+    );
+  }, [taskFilter, taskGroups, taskQuery, tasks]);
+
+  const visibleNotes = useMemo(() => {
+    const query = noteQuery.trim().toLowerCase();
+    return notes.filter((note) => {
+      const matchesTag = noteTagFilter === "all" || note.tags.includes(noteTagFilter);
+      const matchesQuery =
+        !query ||
+        [note.title, note.summary, note.content, note.tags.join(" ")].some((value) =>
+          value.toLowerCase().includes(query),
+        );
+      return matchesTag && matchesQuery;
+    });
+  }, [noteQuery, noteTagFilter, notes]);
+
+  const reminderGroups = useMemo(
+    () => ({
+      all: reminders,
+      active: reminders.filter((reminder) => reminder.status === "active"),
+      snoozed: reminders.filter((reminder) => reminder.status === "snoozed"),
+      done: reminders.filter((reminder) => reminder.status === "done"),
+    }),
+    [reminders],
+  );
+
+  const visibleReminders = useMemo(() => {
+    const scoped = reminderGroups[reminderFilter];
+    const query = reminderQuery.trim().toLowerCase();
+    if (!query) {
+      return scoped;
+    }
+
+    return scoped.filter((reminder) =>
+      [reminder.title, reminder.when, reminder.repeat, reminder.priority, reminder.status].some((value) =>
+        value.toLowerCase().includes(query),
+      ),
+    );
+  }, [reminderFilter, reminderGroups, reminderQuery]);
 
   const briefFocus = useMemo(() => {
     if (overdueCount > 0) {
@@ -651,27 +727,44 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                   </div>
 
                   <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                    <DashboardPanel title={`Today (${filteredTaskGroups.today.length})`}>
-                      {filteredTaskGroups.today.length > 0 ? (
+                    <DashboardPanel title="Task Queue">
+                      <div className="mb-4 space-y-3">
+                        <input
+                          value={taskQuery}
+                          onChange={(e) => setTaskQuery(e.target.value)}
+                          placeholder="Search tasks, due dates, or priorities"
+                          className="field-input"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          {taskFilterOptions.map((filter) => (
+                            <button
+                              key={filter}
+                              type="button"
+                              onClick={() => setTaskFilter(filter)}
+                              className={clsx("small-action", taskFilter === filter && "primary")}
+                            >
+                              {filter} ({taskGroups[filter].length})
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {visibleTasks.length > 0 ? (
                         <div className="space-y-4">
-                          {filteredTaskGroups.today.map((task) => (
+                          {visibleTasks.map((task) => (
                             <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => deleteTask(task.id)} />
                           ))}
                         </div>
                       ) : (
-                        <EmptyState title="Nothing due today" description="Use the task builder or ask JARVIS to turn a note into action items." />
+                        <EmptyState title="No tasks match this filter" description="Try a broader search, change the task state filter, or create a new task from the builder." />
                       )}
                     </DashboardPanel>
-                    <DashboardPanel title={`Upcoming (${filteredTaskGroups.upcoming.length})`}>
-                      {filteredTaskGroups.upcoming.length > 0 ? (
-                        <div className="space-y-4">
-                          {filteredTaskGroups.upcoming.map((task) => (
-                            <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => deleteTask(task.id)} />
-                          ))}
-                        </div>
-                      ) : (
-                        <EmptyState title="No upcoming work yet" description="Once reminders or task proposals are approved, they will appear here." />
-                      )}
+                    <DashboardPanel title="Task Snapshot">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <TaskInsightCard label="Today" value={String(filteredTaskGroups.today.length)} detail="Due or happening today" />
+                        <TaskInsightCard label="Upcoming" value={String(filteredTaskGroups.upcoming.length)} detail="Still ahead of schedule" />
+                        <TaskInsightCard label="Overdue" value={String(filteredTaskGroups.overdue.length)} detail="Worth clearing first" />
+                        <TaskInsightCard label="Completed" value={String(filteredTaskGroups.completed.length)} detail="Already wrapped up" />
+                      </div>
                     </DashboardPanel>
                   </div>
                 </SectionPage>
@@ -693,9 +786,29 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                     </DashboardPanel>
 
                     <DashboardPanel title="Note Library">
-                      {notes.length > 0 ? (
+                      <div className="mb-4 space-y-3">
+                        <input
+                          value={noteQuery}
+                          onChange={(e) => setNoteQuery(e.target.value)}
+                          placeholder="Search notes, summaries, or tags"
+                          className="field-input"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          {noteTags.map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => setNoteTagFilter(tag)}
+                              className={clsx("small-action", noteTagFilter === tag && "primary")}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {visibleNotes.length > 0 ? (
                         <div className="space-y-3">
-                          {notes.map((note) => (
+                          {visibleNotes.map((note) => (
                             <div key={note.id} className="app-card p-4">
                               <button type="button" onClick={() => setSelectedNoteId(note.id)} className="w-full text-left">
                                 <div className="flex items-center justify-between gap-3">
@@ -713,7 +826,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           ))}
                         </div>
                       ) : (
-                        <EmptyState title="No notes yet" description="Save a note here, then let JARVIS summarize it or extract tasks from it." />
+                        <EmptyState title="No notes match this view" description="Clear the search or switch tags to bring back the rest of your note library." />
                       )}
                     </DashboardPanel>
                   </div>
@@ -832,6 +945,11 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           </button>
                         ))}
                       </div>
+                      <div className="assistant-mini-grid mt-4">
+                        <MiniMetric label="Pending approvals" value={String(pendingCount)} />
+                        <MiniMetric label="Drafts in review" value={String(pendingDraftCount)} />
+                        <MiniMetric label="Call plans" value={String(pendingCallCount)} />
+                      </div>
                     </DashboardPanel>
                   </div>
 
@@ -912,46 +1030,43 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                     </DashboardPanel>
                   </div>
 
-                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
-                    <DashboardPanel title="Active">
-                      {reminders.filter((reminder) => reminder.status === "active").length > 0 ? (
+                  <div className="mt-4">
+                    <DashboardPanel title="Reminder Queue">
+                      <div className="mb-4 space-y-3">
+                        <input
+                          value={reminderQuery}
+                          onChange={(e) => setReminderQuery(e.target.value)}
+                          placeholder="Search reminders, repeat rules, or status"
+                          className="field-input"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          {reminderFilterOptions.map((filter) => (
+                            <button
+                              key={filter}
+                              type="button"
+                              onClick={() => setReminderFilter(filter)}
+                              className={clsx("small-action", reminderFilter === filter && "primary")}
+                            >
+                              {filter} ({reminderGroups[filter].length})
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {visibleReminders.length > 0 ? (
                         <div className="space-y-3">
-                          {reminders
-                            .filter((reminder) => reminder.status === "active")
-                            .map((reminder) => (
-                              <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
-                            ))}
+                          {visibleReminders.map((reminder) => (
+                            <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
+                          ))}
                         </div>
                       ) : (
-                        <EmptyState title="No active reminders" description="Create one from this page or approve one from the confirmation queue." />
+                        <EmptyState title="No reminders match this filter" description="Try a different status or clear the search query to see the rest of your reminders." />
                       )}
                     </DashboardPanel>
-                    <DashboardPanel title="Snoozed">
-                      {reminders.filter((reminder) => reminder.status === "snoozed").length > 0 ? (
-                        <div className="space-y-3">
-                          {reminders
-                            .filter((reminder) => reminder.status === "snoozed")
-                            .map((reminder) => (
-                              <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
-                            ))}
-                        </div>
-                      ) : (
-                        <EmptyState title="No snoozed reminders" description="Snoozed reminders will collect here so they are easy to reactivate later." />
-                      )}
-                    </DashboardPanel>
-                    <DashboardPanel title="Done">
-                      {reminders.filter((reminder) => reminder.status === "done").length > 0 ? (
-                        <div className="space-y-3">
-                          {reminders
-                            .filter((reminder) => reminder.status === "done")
-                            .map((reminder) => (
-                              <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
-                            ))}
-                        </div>
-                      ) : (
-                        <EmptyState title="No completed reminders yet" description="As you mark reminders done, JARVIS will keep a simple completion history here." />
-                      )}
-                    </DashboardPanel>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-3">
+                    <TaskInsightCard label="Active" value={String(reminderGroups.active.length)} detail="Ready to notify" />
+                    <TaskInsightCard label="Snoozed" value={String(reminderGroups.snoozed.length)} detail="Deferred for later" />
+                    <TaskInsightCard label="Done" value={String(reminderGroups.done.length)} detail="Already handled" />
                   </div>
                 </SectionPage>
               ) : null}
@@ -1301,6 +1416,25 @@ function DashboardPanel({
       </div>
       <div>{children}</div>
     </section>
+  );
+}
+
+function TaskInsightCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="app-card p-4">
+      <p className="accent-copy text-xs uppercase tracking-[0.18em]">{label}</p>
+      <p className="title-main mt-3 text-3xl">{value}</p>
+      <p className="copy-soft mt-2 text-sm leading-6">{detail}</p>
+    </div>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="app-card p-4">
+      <p className="copy-soft text-xs uppercase tracking-[0.16em]">{label}</p>
+      <p className="title-main mt-2 text-2xl">{value}</p>
+    </div>
   );
 }
 

@@ -86,3 +86,54 @@ export type PendingAction = {
   status: "pending" | "approved" | "cancelled";
   payload: Record<string, unknown>;
 };
+
+export type JarvisStateSnapshot = {
+  tasks: Task[];
+  notes: Note[];
+  reminders: Reminder[];
+  drafts: EmailDraft[];
+  calls: CallRequest[];
+  pendingActions: PendingAction[];
+  assistantFeed: string[];
+};
+
+export type JarvisMutationRequest =
+  | { type: "submit_command"; input: string }
+  | { type: "approve_action"; actionId: string }
+  | { type: "cancel_action"; actionId: string }
+  | { type: "update_pending_action"; actionId: string; updates: Partial<PendingAction> }
+  | {
+      type: "add_task";
+      input: {
+        title: string;
+        due: string;
+        priority: Task["priority"];
+        description?: string;
+      };
+    }
+  | { type: "toggle_task"; taskId: string }
+  | { type: "delete_task"; taskId: string }
+  | {
+      type: "add_note";
+      input: {
+        title: string;
+        content: string;
+      };
+    }
+  | { type: "delete_note"; noteId: string }
+  | { type: "summarize_note"; noteId: string }
+  | { type: "suggest_note_tags"; noteId: string }
+  | {
+      type: "add_reminder";
+      input: {
+        title: string;
+        when: string;
+        repeat: Reminder["repeat"];
+        priority: Reminder["priority"];
+      };
+    }
+  | { type: "update_reminder"; reminderId: string; updates: Partial<Reminder> }
+  | { type: "delete_reminder"; reminderId: string }
+  | { type: "save_draft"; draftId: string; updates: Partial<EmailDraft> }
+  | { type: "delete_draft"; draftId: string }
+  | { type: "create_call_followups"; callId: string };

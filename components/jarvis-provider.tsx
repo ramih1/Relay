@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   initialCalls,
   initialEmailDrafts,
@@ -16,7 +9,15 @@ import {
   initialReminders,
   initialTasks,
 } from "@/lib/data";
-import type { CallRequest, EmailDraft, Note, PendingAction, Reminder, Task } from "@/lib/types";
+import type {
+  EmailDraft,
+  JarvisMutationRequest,
+  JarvisStateSnapshot,
+  Note,
+  PendingAction,
+  Reminder,
+  Task,
+} from "@/lib/types";
 
 type NewTaskInput = {
   title: string;
@@ -42,578 +43,118 @@ type JarvisStore = {
   notes: Note[];
   reminders: Reminder[];
   drafts: EmailDraft[];
-  calls: CallRequest[];
+  calls: JarvisStateSnapshot["calls"];
   pendingActions: PendingAction[];
   assistantFeed: string[];
-  submitCommand: (input: string) => void;
-  approveAction: (actionId: string) => void;
-  cancelAction: (actionId: string) => void;
-  updatePendingAction: (actionId: string, updates: Partial<PendingAction>) => void;
-  addTask: (input: NewTaskInput) => void;
-  toggleTask: (taskId: string) => void;
-  deleteTask: (taskId: string) => void;
-  addNote: (input: NewNoteInput) => void;
-  updateNote: (noteId: string, updates: Partial<Note>) => void;
-  deleteNote: (noteId: string) => void;
-  addReminder: (input: NewReminderInput) => void;
-  updateReminder: (reminderId: string, updates: Partial<Reminder>) => void;
-  deleteReminder: (reminderId: string) => void;
-  saveDraft: (draftId: string, updates: Partial<EmailDraft>) => void;
-  deleteDraft: (draftId: string) => void;
-  summarizeNote: (noteId: string) => void;
-  suggestNoteTags: (noteId: string) => void;
-  createCallFollowups: (callId: string) => void;
+  submitCommand: (input: string) => Promise<void>;
+  approveAction: (actionId: string) => Promise<void>;
+  cancelAction: (actionId: string) => Promise<void>;
+  updatePendingAction: (actionId: string, updates: Partial<PendingAction>) => Promise<void>;
+  addTask: (input: NewTaskInput) => Promise<void>;
+  toggleTask: (taskId: string) => Promise<void>;
+  deleteTask: (taskId: string) => Promise<void>;
+  addNote: (input: NewNoteInput) => Promise<void>;
+  updateNote: (noteId: string, updates: Partial<Note>) => Promise<void>;
+  deleteNote: (noteId: string) => Promise<void>;
+  addReminder: (input: NewReminderInput) => Promise<void>;
+  updateReminder: (reminderId: string, updates: Partial<Reminder>) => Promise<void>;
+  deleteReminder: (reminderId: string) => Promise<void>;
+  saveDraft: (draftId: string, updates: Partial<EmailDraft>) => Promise<void>;
+  deleteDraft: (draftId: string) => Promise<void>;
+  summarizeNote: (noteId: string) => Promise<void>;
+  suggestNoteTags: (noteId: string) => Promise<void>;
+  createCallFollowups: (callId: string) => Promise<void>;
 };
 
-type PersistedState = Pick<
-  JarvisStore,
-  "tasks" | "notes" | "reminders" | "drafts" | "calls" | "pendingActions" | "assistantFeed"
->;
-
-const STORAGE_KEY = "jarvis-state-v1";
+const fallbackState: JarvisStateSnapshot = {
+  tasks: initialTasks,
+  notes: initialNotes,
+  reminders: initialReminders,
+  drafts: initialEmailDrafts,
+  calls: initialCalls,
+  pendingActions: initialPendingActions,
+  assistantFeed: [
+    "I can prepare reminders, email drafts, note summaries, and simulated call plans. Important actions always wait for your approval.",
+  ],
+};
 
 const JarvisContext = createContext<JarvisStore | null>(null);
 
 export function JarvisProvider({ children }: { children: ReactNode }) {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [notes, setNotes] = useState<Note[]>(initialNotes);
-  const [reminders, setReminders] = useState<Reminder[]>(initialReminders);
-  const [drafts, setDrafts] = useState<EmailDraft[]>(initialEmailDrafts);
-  const [calls, setCalls] = useState<CallRequest[]>(initialCalls);
-  const [pendingActions, setPendingActions] = useState<PendingAction[]>(initialPendingActions);
-  const [assistantFeed, setAssistantFeed] = useState<string[]>([
-    "I can prepare reminders, email drafts, note summaries, and simulated call plans. Important actions always wait for your approval.",
-  ]);
-  const [hydrated, setHydrated] = useState(false);
+  const [state, setState] = useState<JarvisStateSnapshot>(fallbackState);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        setHydrated(true);
-        return;
-      }
+    let cancelled = false;
 
-      const parsed = JSON.parse(raw) as Partial<PersistedState>;
-      if (parsed.tasks) {
-        setTasks(parsed.tasks);
+    async function loadState() {
+      try {
+        const response = await fetch("/api/state", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+        const snapshot = (await response.json()) as JarvisStateSnapshot;
+        if (!cancelled) {
+          setState(snapshot);
+        }
+      } catch {
+        // Keep fallback state if the backend is unavailable.
       }
-      if (parsed.notes) {
-        setNotes(parsed.notes);
-      }
-      if (parsed.reminders) {
-        setReminders(parsed.reminders);
-      }
-      if (parsed.drafts) {
-        setDrafts(parsed.drafts);
-      }
-      if (parsed.calls) {
-        setCalls(parsed.calls);
-      }
-      if (parsed.pendingActions) {
-        setPendingActions(parsed.pendingActions);
-      }
-      if (parsed.assistantFeed) {
-        setAssistantFeed(parsed.assistantFeed);
-      }
-    } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } finally {
-      setHydrated(true);
     }
+
+    void loadState();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    if (!hydrated) {
-      return;
+  async function mutate(payload: JarvisMutationRequest) {
+    const response = await fetch("/api/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to update JARVIS state.");
     }
 
-    const snapshot: PersistedState = {
-      tasks,
-      notes,
-      reminders,
-      drafts,
-      calls,
-      pendingActions,
-      assistantFeed,
-    };
-
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-  }, [assistantFeed, calls, drafts, hydrated, notes, pendingActions, reminders, tasks]);
-
-  function submitCommand(rawInput: string) {
-    const input = rawInput.trim();
-    if (!input) {
-      return;
-    }
-
-    const lower = input.toLowerCase();
-
-    if (lower.includes("remind me")) {
-      const newAction: PendingAction = {
-        id: crypto.randomUUID(),
-        type: "create_reminder",
-        title: "Create Reminder",
-        description: "Submit project • Fri, 5:00 PM",
-        risk: "medium",
-        status: "pending",
-        payload: {
-          title: "Submit project",
-          when: "Friday, 5:00 PM",
-          repeat: "none",
-          priority: "high",
-        },
-      };
-      setPendingActions((current) => [newAction, ...current]);
-      setAssistantFeed((current) => [
-        `Prepared a reminder proposal for "${input}". It is waiting in Confirmations.`,
-        ...current,
-      ]);
-      return;
-    }
-
-    if (lower.includes("draft an email")) {
-      const draftId = crypto.randomUUID();
-      const newDraft: EmailDraft = {
-        id: draftId,
-        recipient: "Recipient to be confirmed",
-        subject: "Request for an Extension",
-        tone: "professional",
-        status: "draft",
-        body:
-          "Hi,\n\nI hope you're doing well. I wanted to ask whether a short extension would be possible. I have been working steadily on the assignment and would appreciate a little more time to submit my best work.\n\nThank you for considering it.\n\nBest,\nRami",
-      };
-      const newAction: PendingAction = {
-        id: crypto.randomUUID(),
-        type: "draft_email",
-        title: "Email Draft to Professor",
-        description: "Asking for extension on assignment",
-        risk: "medium",
-        status: "pending",
-        payload: { draftId },
-      };
-      setDrafts((current) => [newDraft, ...current]);
-      setPendingActions((current) => [newAction, ...current]);
-      setAssistantFeed((current) => [
-        "Drafted an email request and queued it for approval before saving.",
-        ...current,
-      ]);
-      return;
-    }
-
-    if (lower.includes("call")) {
-      const callId = crypto.randomUUID();
-      const newCall: CallRequest = {
-        id: callId,
-        contactName: "Campus Gym",
-        phoneNumber: "(555) 210-1184",
-        purpose: "Ask if basketball court is free tonight",
-        script:
-          "Hi, I'm JARVIS, an AI assistant calling on behalf of Rami. I'm checking whether the basketball court is free tonight and whether there are any time restrictions.",
-        allowedActions: ["Ask availability", "Ask closing time"],
-        restrictedActions: ["Do not book anything", "Do not share private details"],
-        status: "pending",
-      };
-      const newAction: PendingAction = {
-        id: crypto.randomUUID(),
-        type: "place_call",
-        title: "Call Campus Gym",
-        description: "Ask about basketball court availability",
-        risk: "high",
-        status: "pending",
-        payload: { callId },
-      };
-      setCalls((current) => [newCall, ...current]);
-      setPendingActions((current) => [newAction, ...current]);
-      setAssistantFeed((current) => [
-        "Created a transparent call plan with a script and allowed actions. It is waiting for approval.",
-        ...current,
-      ]);
-      return;
-    }
-
-    if (lower.includes("note") || lower.includes("task")) {
-      const newAction: PendingAction = {
-        id: crypto.randomUUID(),
-        type: "create_tasks_from_note",
-        title: "Create Task from Note",
-        description: "3 tasks identified",
-        risk: "low",
-        status: "pending",
-        payload: {
-          tasks: [
-            "Confirm timeline with professor",
-            "Clean dataset labels",
-            "Email the team the experiment checklist",
-          ],
-        },
-      };
-      setPendingActions((current) => [newAction, ...current]);
-      setAssistantFeed((current) => [
-        "Extracted action items from your note and sent them to Confirmations for review.",
-        ...current,
-      ]);
-      return;
-    }
-
-    setAssistantFeed((current) => [
-      "I understood the request at a high level and would ask one focused follow-up before creating an action proposal in the real agent flow.",
-      ...current,
-    ]);
-  }
-
-  function approveAction(actionId: string) {
-    const action = pendingActions.find((item) => item.id === actionId);
-    if (!action || action.status !== "pending") {
-      return;
-    }
-
-    if (action.type === "create_reminder") {
-      setReminders((current) => [
-        {
-          id: crypto.randomUUID(),
-          title: String(action.payload.title ?? "Untitled reminder"),
-          when: String(action.payload.when ?? "TBD"),
-          repeat: (action.payload.repeat as Reminder["repeat"]) ?? "none",
-          priority: (action.payload.priority as Reminder["priority"]) ?? "high",
-          status: "active",
-        },
-        ...current,
-      ]);
-    }
-
-    if (action.type === "create_tasks_from_note") {
-      const extracted = Array.isArray(action.payload.tasks) ? action.payload.tasks : [];
-      setTasks((current) => [
-        ...extracted
-          .map((title) => String(title).trim())
-          .filter(Boolean)
-          .map((title, index) => ({
-            id: crypto.randomUUID(),
-            title,
-            due: index === 0 ? "Tomorrow, 1:00 PM" : "Friday, 4:00 PM",
-            status: "pending" as const,
-            priority: "medium" as const,
-          })),
-        ...current,
-      ]);
-    }
-
-    if (action.type === "create_task") {
-      setTasks((current) => [
-        {
-          id: crypto.randomUUID(),
-          title: String(action.payload.title ?? "Follow-up task"),
-          due: String(action.payload.due ?? "Tomorrow, 12:00 PM"),
-          priority: (action.payload.priority as Task["priority"]) ?? "medium",
-          description: String(action.payload.description ?? ""),
-          status: "pending",
-        },
-        ...current,
-      ]);
-    }
-
-    if (action.type === "draft_email") {
-      const draftId = String(action.payload.draftId);
-      setDrafts((current) =>
-        current.map((draft) => (draft.id === draftId ? { ...draft, status: "approved" } : draft)),
-      );
-    }
-
-    if (action.type === "place_call") {
-      const callId = String(action.payload.callId);
-      setCalls((current) =>
-        current.map((call) =>
-          call.id === callId
-            ? {
-                ...call,
-                status: "simulated",
-                transcript:
-                  "JARVIS: Hi, I'm JARVIS calling on behalf of Rami.\nGym: The court should be free after 7:30 PM.\nJARVIS: Thanks. Is there a closing time?\nGym: We close at 10 PM tonight.\nJARVIS: Perfect, I'll pass that along.",
-                summary: "Court is free after 7:30 PM and the gym closes at 10 PM.",
-              }
-            : call,
-        ),
-      );
-    }
-
-    if (action.type === "create_followup_task") {
-      setReminders((current) => [
-        {
-          id: crypto.randomUUID(),
-          title: String(action.payload.title ?? "Follow-up"),
-          when: String(action.payload.when ?? "Later"),
-          repeat: "none",
-          priority: "medium",
-          status: "active",
-        },
-        ...current,
-      ]);
-    }
-
-    setPendingActions((current) =>
-      current.map((item) => (item.id === action.id ? { ...item, status: "approved" } : item)),
-    );
-  }
-
-  function cancelAction(actionId: string) {
-    setPendingActions((current) =>
-      current.map((item) => (item.id === actionId ? { ...item, status: "cancelled" } : item)),
-    );
-  }
-
-  function updatePendingAction(actionId: string, updates: Partial<PendingAction>) {
-    setPendingActions((current) =>
-      current.map((item) =>
-        item.id === actionId
-          ? {
-              ...item,
-              ...updates,
-              payload:
-                updates.payload && typeof updates.payload === "object"
-                  ? { ...item.payload, ...updates.payload }
-                  : item.payload,
-            }
-          : item,
-      ),
-    );
-  }
-
-  function addTask(input: NewTaskInput) {
-    setTasks((current) => [
-      {
-        id: crypto.randomUUID(),
-        title: input.title,
-        due: input.due,
-        priority: input.priority,
-        description: input.description,
-        status: "pending",
-      },
-      ...current,
-    ]);
-    setAssistantFeed((current) => [`Added a new task: ${input.title}.`, ...current]);
-  }
-
-  function toggleTask(taskId: string) {
-    setTasks((current) =>
-      current.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              status: task.status === "done" ? "pending" : "done",
-            }
-          : task,
-      ),
-    );
-  }
-
-  function deleteTask(taskId: string) {
-    setTasks((current) => current.filter((task) => task.id !== taskId));
-  }
-
-  function addNote(input: NewNoteInput) {
-    const summary = input.content.length > 110 ? `${input.content.slice(0, 107)}...` : input.content;
-    setNotes((current) => [
-      {
-        id: crypto.randomUUID(),
-        title: input.title,
-        content: input.content,
-        summary,
-        tags: ["new"],
-      },
-      ...current,
-    ]);
-    setAssistantFeed((current) => [`Saved a new note: ${input.title}.`, ...current]);
-  }
-
-  function updateNote(noteId: string, updates: Partial<Note>) {
-    setNotes((current) =>
-      current.map((note) =>
-        note.id === noteId
-          ? {
-              ...note,
-              ...updates,
-            }
-          : note,
-      ),
-    );
-  }
-
-  function deleteNote(noteId: string) {
-    setNotes((current) => current.filter((note) => note.id !== noteId));
-  }
-
-  function summarizeNote(noteId: string) {
-    const target = notes.find((note) => note.id === noteId);
-    if (!target) {
-      return;
-    }
-
-    const cleaned = target.content.replace(/^Messy notes:\s*/i, "");
-    const parts = cleaned
-      .split(/[,.]/)
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .slice(0, 3);
-    const summary =
-      parts.length > 0
-        ? `Key points: ${parts.join(", ")}.`
-        : target.content.length > 140
-          ? `${target.content.slice(0, 137)}...`
-          : target.content;
-
-    updateNote(noteId, { summary });
-    setAssistantFeed((current) => [`Summarized note: ${target.title}.`, ...current]);
-  }
-
-  function suggestNoteTags(noteId: string) {
-    const target = notes.find((note) => note.id === noteId);
-    if (!target) {
-      return;
-    }
-
-    const lower = `${target.title} ${target.content}`.toLowerCase();
-    const nextTags = new Set<string>();
-
-    if (/(professor|assignment|lecture|class|research|project)/.test(lower)) {
-      nextTags.add("school");
-    }
-    if (/(gym|basketball|workout|fitness)/.test(lower)) {
-      nextTags.add("health");
-    }
-    if (/(email|team|meeting|internship|work)/.test(lower)) {
-      nextTags.add("work");
-    }
-    if (/(laundry|apartment|errand|parcel|budget)/.test(lower)) {
-      nextTags.add("life");
-    }
-    if (nextTags.size === 0) {
-      nextTags.add("general");
-    }
-
-    updateNote(noteId, { tags: Array.from(nextTags) });
-    setAssistantFeed((current) => [`Suggested tags for note: ${target.title}.`, ...current]);
-  }
-
-  function addReminder(input: NewReminderInput) {
-    setReminders((current) => [
-      {
-        id: crypto.randomUUID(),
-        title: input.title,
-        when: input.when,
-        repeat: input.repeat,
-        priority: input.priority,
-        status: "active",
-      },
-      ...current,
-    ]);
-    setAssistantFeed((current) => [`Added a reminder: ${input.title}.`, ...current]);
-  }
-
-  function updateReminder(reminderId: string, updates: Partial<Reminder>) {
-    setReminders((current) =>
-      current.map((reminder) =>
-        reminder.id === reminderId
-          ? {
-              ...reminder,
-              ...updates,
-            }
-          : reminder,
-      ),
-    );
-  }
-
-  function deleteReminder(reminderId: string) {
-    setReminders((current) => current.filter((reminder) => reminder.id !== reminderId));
-  }
-
-  function saveDraft(draftId: string, updates: Partial<EmailDraft>) {
-    setDrafts((current) =>
-      current.map((draft) =>
-        draft.id === draftId
-          ? {
-              ...draft,
-              ...updates,
-            }
-          : draft,
-      ),
-    );
-  }
-
-  function deleteDraft(draftId: string) {
-    setDrafts((current) => current.filter((draft) => draft.id !== draftId));
-  }
-
-  function createCallFollowups(callId: string) {
-    const call = calls.find((item) => item.id === callId);
-    if (!call) {
-      return;
-    }
-
-    const reminderAction: PendingAction = {
-      id: crypto.randomUUID(),
-      type: "create_followup_task",
-      title: `Reminder from ${call.contactName}`,
-      description: "Leave around 6:45 PM if you want to make the 7:30 opening.",
-      risk: "medium",
-      status: "pending",
-      payload: {
-        title: "Leave for the gym",
-        when: "Today, 6:45 PM",
-      },
-    };
-
-    const taskAction: PendingAction = {
-      id: crypto.randomUUID(),
-      type: "create_task",
-      title: `Plan around ${call.contactName}`,
-      description: "Create a quick plan based on the call result.",
-      risk: "medium",
-      status: "pending",
-      payload: {
-        title: "Text friends about basketball at 7:30",
-        due: "Today, 5:30 PM",
-        priority: "medium",
-        description: "Share the court timing from the gym call summary.",
-      },
-    };
-
-    setPendingActions((current) => [taskAction, reminderAction, ...current]);
-    setAssistantFeed((current) => [
-      `Prepared follow-up suggestions from the ${call.contactName} call. They are waiting in Confirmations.`,
-      ...current,
-    ]);
+    const snapshot = (await response.json()) as JarvisStateSnapshot;
+    setState(snapshot);
   }
 
   const value = useMemo<JarvisStore>(
     () => ({
-      tasks,
-      notes,
-      reminders,
-      drafts,
-      calls,
-      pendingActions,
-      assistantFeed,
-      submitCommand,
-      approveAction,
-      cancelAction,
-      updatePendingAction,
-      addTask,
-      toggleTask,
-      deleteTask,
-      addNote,
-      updateNote,
-      deleteNote,
-      addReminder,
-      updateReminder,
-      deleteReminder,
-      saveDraft,
-      deleteDraft,
-      summarizeNote,
-      suggestNoteTags,
-      createCallFollowups,
+      ...state,
+      submitCommand: async (input) => mutate({ type: "submit_command", input }),
+      approveAction: async (actionId) => mutate({ type: "approve_action", actionId }),
+      cancelAction: async (actionId) => mutate({ type: "cancel_action", actionId }),
+      updatePendingAction: async (actionId, updates) =>
+        mutate({ type: "update_pending_action", actionId, updates }),
+      addTask: async (input) => mutate({ type: "add_task", input }),
+      toggleTask: async (taskId) => mutate({ type: "toggle_task", taskId }),
+      deleteTask: async (taskId) => mutate({ type: "delete_task", taskId }),
+      addNote: async (input) => mutate({ type: "add_note", input }),
+      updateNote: async (noteId, updates) => {
+        if (updates.summary) {
+          await mutate({ type: "summarize_note", noteId });
+          return;
+        }
+        if (updates.tags) {
+          await mutate({ type: "suggest_note_tags", noteId });
+        }
+      },
+      deleteNote: async (noteId) => mutate({ type: "delete_note", noteId }),
+      addReminder: async (input) => mutate({ type: "add_reminder", input }),
+      updateReminder: async (reminderId, updates) => mutate({ type: "update_reminder", reminderId, updates }),
+      deleteReminder: async (reminderId) => mutate({ type: "delete_reminder", reminderId }),
+      saveDraft: async (draftId, updates) => mutate({ type: "save_draft", draftId, updates }),
+      deleteDraft: async (draftId) => mutate({ type: "delete_draft", draftId }),
+      summarizeNote: async (noteId) => mutate({ type: "summarize_note", noteId }),
+      suggestNoteTags: async (noteId) => mutate({ type: "suggest_note_tags", noteId }),
+      createCallFollowups: async (callId) => mutate({ type: "create_call_followups", callId }),
     }),
-    [assistantFeed, calls, drafts, notes, pendingActions, reminders, tasks],
+    [state],
   );
 
   return <JarvisContext.Provider value={value}>{children}</JarvisContext.Provider>;
@@ -622,8 +163,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
 export function useJarvis() {
   const context = useContext(JarvisContext);
   if (!context) {
-    throw new Error("useJarvis must be used within a JarvisProvider");
+    throw new Error("useJarvis must be used inside JarvisProvider");
   }
-
   return context;
 }
