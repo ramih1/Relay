@@ -1,0 +1,204 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #070b0f;
+  --panel: rgba(14, 18, 21, 0.92);
+  --panel-alt: rgba(19, 24, 28, 0.95);
+  --line: rgba(180, 146, 88, 0.24);
+  --text: #ece6db;
+  --muted: #9e9a92;
+  --accent: #56d3d0;
+  --accent-soft: rgba(86, 211, 208, 0.14);
+  --warn: #e6bf7d;
+  --success: #9fe1d4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(circle at top left, rgba(86, 211, 208, 0.08), transparent 18%),
+    radial-gradient(circle at top right, rgba(232, 193, 130, 0.05), transparent 12%),
+    linear-gradient(180deg, #070b0f 0%, #0a0f13 55%, #070b0f 100%);
+  color: var(--text);
+  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.jarvis-shell {
+  border: 1px solid rgba(161, 128, 74, 0.42);
+  border-radius: 2rem;
+  background:
+    linear-gradient(180deg, rgba(13, 17, 20, 0.95), rgba(8, 11, 14, 0.98)),
+    radial-gradient(circle at top, rgba(86, 211, 208, 0.05), transparent 30%);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(22px);
+}
+
+.feature-panel {
+  border: 1px solid rgba(161, 128, 74, 0.34);
+  border-radius: 1.65rem;
+  background: linear-gradient(180deg, rgba(18, 22, 25, 0.94), rgba(13, 16, 20, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  padding: 1.35rem;
+}
+
+.hero-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(161, 128, 74, 0.34);
+  border-radius: 1.7rem;
+  background:
+    radial-gradient(circle at top right, rgba(86, 211, 208, 0.04), transparent 20%),
+    linear-gradient(180deg, rgba(23, 27, 30, 0.96), rgba(16, 19, 22, 0.98));
+  padding: 1.5rem;
+}
+
+.soft-card {
+  border: 1px solid rgba(161, 128, 74, 0.28);
+  border-radius: 1.35rem;
+  background: linear-gradient(180deg, rgba(18, 22, 25, 0.92), rgba(12, 16, 19, 0.94));
+}
+
+.command-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  border: 1px solid rgba(161, 128, 74, 0.38);
+  border-radius: 1.45rem;
+  background: linear-gradient(180deg, rgba(24, 28, 31, 0.96), rgba(18, 21, 24, 0.98));
+  padding: 1rem 1.15rem;
+}
+
+.icon-chip {
+  display: inline-flex;
+  height: 2.85rem;
+  width: 2.85rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(161, 128, 74, 0.32);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.02);
+  color: #f2e9db;
+}
+
+.avatar-chip {
+  display: grid;
+  height: 2.8rem;
+  width: 2.8rem;
+  place-items: center;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: #f0e6d6;
+}
+
+.eyebrow {
+  font-size: 0.88rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #f0d3a2;
+}
+
+.soft-outline {
+  border: 1px solid rgba(161, 128, 74, 0.36);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.025);
+  padding: 0.85rem 1rem;
+  color: #e9dfd0;
+}
+
+.panel-link {
+  color: #68d2cf;
+  font-size: 0.95rem;
+}
+
+.jarvis-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 0;
+  border-radius: 0.95rem;
+  background: linear-gradient(135deg, #69d6d0, #54c7c1);
+  padding: 0.95rem 1.45rem;
+  color: #102025;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.jarvis-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(125, 216, 202, 0.22);
+}
+
+.small-action {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.02);
+  color: #ece3d6;
+  padding: 0.5rem 0.85rem;
+}
+
+.small-action.primary {
+  border-color: rgba(86, 211, 208, 0.3);
+  background: rgba(86, 211, 208, 0.1);
+  color: #9ce4df;
+}
+
+.orbital-art {
+  pointer-events: none;
+  position: absolute;
+  right: 3rem;
+  top: 2.75rem;
+  height: 15rem;
+  width: 15rem;
+  opacity: 0.78;
+}
+
+.orbital-art span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(180, 146, 88, 0.2);
+  border-radius: 50%;
+  transform: rotate(18deg);
+}
+
+.orbital-art span:nth-child(2) {
+  inset: 1.1rem;
+}
+
+.orbital-art span:nth-child(3) {
+  inset: 2.2rem;
+}
+
+.orbital-art span:nth-child(4) {
+  inset: 3.3rem;
+}
+
+.orbital-art span:nth-child(5) {
+  inset: 4.6rem;
+  background: radial-gradient(circle, rgba(232, 193, 130, 0.95), rgba(232, 193, 130, 0.04) 38%, transparent 45%);
+}
+
+@media (max-width: 1024px) {
+  .orbital-art {
+    display: none;
+  }
+}
