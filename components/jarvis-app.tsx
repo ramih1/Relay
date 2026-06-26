@@ -230,6 +230,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     });
   }
 
+  const canCreateTask = taskForm.title.trim().length > 0 && taskForm.due.trim().length > 0;
+  const canCreateNote = noteForm.title.trim().length > 0 && noteForm.content.trim().length > 0;
+  const canCreateReminder = reminderForm.title.trim().length > 0 && reminderForm.when.trim().length > 0;
+
   const quickActions = [
     {
       label: "New task",
@@ -543,7 +547,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <textarea value={taskForm.description} onChange={(e) => setTaskForm((c) => ({ ...c, description: e.target.value }))} placeholder="Optional description" className="field-input min-h-28 md:col-span-2" />
                       </div>
                       <div className="mt-4">
-                        <button type="button" className="jarvis-button" onClick={handleAddTask}>
+                        <button type="button" className="jarvis-button" onClick={handleAddTask} disabled={!canCreateTask}>
                           Create Task
                         </button>
                       </div>
@@ -562,18 +566,26 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
                   <div className="mt-4 grid gap-4 xl:grid-cols-2">
                     <DashboardPanel title={`Today (${filteredTaskGroups.today.length})`}>
-                      <div className="space-y-4">
-                        {filteredTaskGroups.today.map((task) => (
-                          <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => deleteTask(task.id)} />
-                        ))}
-                      </div>
+                      {filteredTaskGroups.today.length > 0 ? (
+                        <div className="space-y-4">
+                          {filteredTaskGroups.today.map((task) => (
+                            <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => deleteTask(task.id)} />
+                          ))}
+                        </div>
+                      ) : (
+                        <EmptyState title="Nothing due today" description="Use the task builder or ask JARVIS to turn a note into action items." />
+                      )}
                     </DashboardPanel>
                     <DashboardPanel title={`Upcoming (${filteredTaskGroups.upcoming.length})`}>
-                      <div className="space-y-4">
-                        {filteredTaskGroups.upcoming.map((task) => (
-                          <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => deleteTask(task.id)} />
-                        ))}
-                      </div>
+                      {filteredTaskGroups.upcoming.length > 0 ? (
+                        <div className="space-y-4">
+                          {filteredTaskGroups.upcoming.map((task) => (
+                            <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => deleteTask(task.id)} />
+                          ))}
+                        </div>
+                      ) : (
+                        <EmptyState title="No upcoming work yet" description="Once reminders or task proposals are approved, they will appear here." />
+                      )}
                     </DashboardPanel>
                   </div>
                 </SectionPage>
@@ -588,31 +600,35 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <textarea value={noteForm.content} onChange={(e) => setNoteForm((c) => ({ ...c, content: e.target.value }))} placeholder="Paste meeting notes, ideas, or reminders" className="field-input min-h-48" />
                       </div>
                       <div className="mt-4">
-                        <button type="button" className="jarvis-button" onClick={handleAddNote}>
+                        <button type="button" className="jarvis-button" onClick={handleAddNote} disabled={!canCreateNote}>
                           Save Note
                         </button>
                       </div>
                     </DashboardPanel>
 
                     <DashboardPanel title="Note Library">
-                      <div className="space-y-3">
-                        {notes.map((note) => (
-                          <div key={note.id} className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-4">
-                            <button type="button" onClick={() => setSelectedNoteId(note.id)} className="w-full text-left">
-                              <div className="flex items-center justify-between gap-3">
-                                <p className="text-lg text-[#f7efe3]">{note.title}</p>
-                                <span className="text-xs uppercase tracking-[0.2em] text-[#56d3d0]">{note.tags[0]}</span>
-                              </div>
-                              <p className="mt-2 text-sm leading-7 text-[#d8d2c7]">{note.summary}</p>
-                            </button>
-                            <div className="mt-3 flex justify-end">
-                              <button type="button" className="small-action" onClick={() => deleteNote(note.id)}>
-                                Delete
+                      {notes.length > 0 ? (
+                        <div className="space-y-3">
+                          {notes.map((note) => (
+                            <div key={note.id} className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-4">
+                              <button type="button" onClick={() => setSelectedNoteId(note.id)} className="w-full text-left">
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-lg text-[#f7efe3]">{note.title}</p>
+                                  <span className="text-xs uppercase tracking-[0.2em] text-[#56d3d0]">{note.tags[0]}</span>
+                                </div>
+                                <p className="mt-2 text-sm leading-7 text-[#d8d2c7]">{note.summary}</p>
                               </button>
+                              <div className="mt-3 flex justify-end">
+                                <button type="button" className="small-action" onClick={() => deleteNote(note.id)}>
+                                  Delete
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <EmptyState title="No notes yet" description="Save a note here, then let JARVIS summarize it or extract tasks from it." />
+                      )}
                     </DashboardPanel>
                   </div>
 
@@ -710,13 +726,17 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                 <SectionPage eyebrow="Assistant" title="Natural language in, structured actions out." description="This workspace shows the command patterns and the running assistant feed behind the dashboard.">
                   <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
                     <DashboardPanel title="Recent Assistant Feed">
-                      <div className="space-y-3">
-                        {assistantFeed.map((message) => (
-                          <div key={message} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-[#efe5d8]">
-                            {message}
-                          </div>
-                        ))}
-                      </div>
+                      {assistantFeed.length > 0 ? (
+                        <div className="space-y-3">
+                          {assistantFeed.map((message) => (
+                            <div key={message} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-[#efe5d8]">
+                              {message}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <EmptyState title="Assistant is quiet" description="Type a natural language request above to create reminders, drafts, task proposals, or call plans." />
+                      )}
                     </DashboardPanel>
                     <DashboardPanel title="Command Patterns">
                       <div className="space-y-3">
@@ -731,29 +751,33 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
                   <div className="mt-4 grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
                     <DashboardPanel title="Email Drafts">
-                      <div className="space-y-3">
-                        {drafts.map((draft) => (
-                          <button
-                            key={draft.id}
-                            type="button"
-                            onClick={() => setSelectedDraftId(draft.id)}
-                            className={clsx(
-                              "w-full rounded-[1.1rem] border px-4 py-4 text-left transition",
-                              selectedDraft?.id === draft.id
-                                ? "border-[#56d3d0]/40 bg-[rgba(86,211,208,0.08)]"
-                                : "border-white/8 bg-white/[0.03] hover:border-[#a07f43]/40",
-                            )}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-base text-[#f3ebde]">{draft.subject}</p>
-                                <p className="mt-1 text-sm text-muted">{draft.recipient}</p>
+                      {drafts.length > 0 ? (
+                        <div className="space-y-3">
+                          {drafts.map((draft) => (
+                            <button
+                              key={draft.id}
+                              type="button"
+                              onClick={() => setSelectedDraftId(draft.id)}
+                              className={clsx(
+                                "w-full rounded-[1.1rem] border px-4 py-4 text-left transition",
+                                selectedDraft?.id === draft.id
+                                  ? "border-[#56d3d0]/40 bg-[rgba(86,211,208,0.08)]"
+                                  : "border-white/8 bg-white/[0.03] hover:border-[#a07f43]/40",
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-base text-[#f3ebde]">{draft.subject}</p>
+                                  <p className="mt-1 text-sm text-muted">{draft.recipient}</p>
+                                </div>
+                                <StatusPill value={draft.status} tone={draft.status === "approved" ? "success" : "warning"} />
                               </div>
-                              <StatusPill value={draft.status} tone={draft.status === "approved" ? "success" : "warning"} />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <EmptyState title="No drafts yet" description="Ask JARVIS to draft an email and it will appear here for editing." />
+                      )}
                     </DashboardPanel>
 
                     <DashboardPanel title={selectedDraft ? "Draft Editor" : "Draft Editor"}>
@@ -787,7 +811,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         </select>
                       </div>
                       <div className="mt-4">
-                        <button type="button" className="jarvis-button" onClick={handleAddReminder}>
+                        <button type="button" className="jarvis-button" onClick={handleAddReminder} disabled={!canCreateReminder}>
                           Create Reminder
                         </button>
                       </div>
@@ -804,31 +828,43 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
                   <div className="mt-4 grid gap-4 xl:grid-cols-3">
                     <DashboardPanel title="Active">
-                      <div className="space-y-3">
-                        {reminders
-                          .filter((reminder) => reminder.status === "active")
-                          .map((reminder) => (
-                            <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
-                          ))}
-                      </div>
+                      {reminders.filter((reminder) => reminder.status === "active").length > 0 ? (
+                        <div className="space-y-3">
+                          {reminders
+                            .filter((reminder) => reminder.status === "active")
+                            .map((reminder) => (
+                              <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
+                            ))}
+                        </div>
+                      ) : (
+                        <EmptyState title="No active reminders" description="Create one from this page or approve one from the confirmation queue." />
+                      )}
                     </DashboardPanel>
                     <DashboardPanel title="Snoozed">
-                      <div className="space-y-3">
-                        {reminders
-                          .filter((reminder) => reminder.status === "snoozed")
-                          .map((reminder) => (
-                            <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
-                          ))}
-                      </div>
+                      {reminders.filter((reminder) => reminder.status === "snoozed").length > 0 ? (
+                        <div className="space-y-3">
+                          {reminders
+                            .filter((reminder) => reminder.status === "snoozed")
+                            .map((reminder) => (
+                              <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
+                            ))}
+                        </div>
+                      ) : (
+                        <EmptyState title="No snoozed reminders" description="Snoozed reminders will collect here so they are easy to reactivate later." />
+                      )}
                     </DashboardPanel>
                     <DashboardPanel title="Done">
-                      <div className="space-y-3">
-                        {reminders
-                          .filter((reminder) => reminder.status === "done")
-                          .map((reminder) => (
-                            <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
-                          ))}
-                      </div>
+                      {reminders.filter((reminder) => reminder.status === "done").length > 0 ? (
+                        <div className="space-y-3">
+                          {reminders
+                            .filter((reminder) => reminder.status === "done")
+                            .map((reminder) => (
+                              <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
+                            ))}
+                        </div>
+                      ) : (
+                        <EmptyState title="No completed reminders yet" description="As you mark reminders done, JARVIS will keep a simple completion history here." />
+                      )}
                     </DashboardPanel>
                   </div>
                 </SectionPage>
@@ -836,6 +872,11 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
               {section === "calendar" ? (
                 <SectionPage eyebrow="Calendar" title="Mock schedule now, real sync later." description="The MVP keeps calendar data local first so approvals stay reliable before external integrations are added.">
+                  <div className="mb-4 grid gap-4 md:grid-cols-3">
+                    <MetricCard label="Meetings" value="2" detail="Classes and check-ins" />
+                    <MetricCard label="Focus gap" value="1h" detail="Open before 3 PM" />
+                    <MetricCard label="Evening plan" value="Gym" detail="Ready to confirm" />
+                  </div>
                   <DashboardPanel title="Today's Schedule">
                     <div className="space-y-4">
                       {scheduleItems.map((item) => (
@@ -854,20 +895,24 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                 <SectionPage eyebrow="Calls" title="A transparent calling assistant." description="Call plans clearly state who JARVIS is contacting, what it may ask, and what it must not do.">
                   <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
                     <DashboardPanel title="Call Queue">
-                      <div className="space-y-4">
-                        {calls.map((call) => (
-                          <div key={call.id} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-xl text-[#f5ede1]">{call.contactName}</p>
-                                <p className="mt-1 text-sm text-muted">{call.purpose}</p>
+                      {calls.length > 0 ? (
+                        <div className="space-y-4">
+                          {calls.map((call) => (
+                            <div key={call.id} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-xl text-[#f5ede1]">{call.contactName}</p>
+                                  <p className="mt-1 text-sm text-muted">{call.purpose}</p>
+                                </div>
+                                <StatusPill value={call.status} tone={call.status === "pending" ? "warning" : "success"} />
                               </div>
-                              <StatusPill value={call.status} tone={call.status === "pending" ? "warning" : "success"} />
+                              <p className="mt-4 text-sm leading-7 text-[#e6ddcf]">{call.script}</p>
                             </div>
-                            <p className="mt-4 text-sm leading-7 text-[#e6ddcf]">{call.script}</p>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <EmptyState title="No call plans yet" description="Ask JARVIS to call a business or office, and it will prepare a transparent script here." />
+                      )}
                     </DashboardPanel>
                     <DashboardPanel title="Latest Summary">
                       <p className="text-sm leading-8 text-[#e9e0d3]">{calls[0]?.summary ?? "Approve a call plan to generate a transcript and summary."}</p>
@@ -893,6 +938,12 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
               {section === "notifications" ? (
                 <SectionPage eyebrow="Notifications" title="See what matters now." description="JARVIS groups mock notifications by urgency so the dashboard stays calm instead of noisy.">
+                  <div className="mb-4 grid gap-4 md:grid-cols-4">
+                    <MetricCard label="Urgent" value={String(initialNotifications.filter((n) => n.category === "urgent").length)} detail="Needs attention now" />
+                    <MetricCard label="Important" value={String(initialNotifications.filter((n) => n.category === "important").length)} detail="Worth looking at soon" />
+                    <MetricCard label="Later" value={String(initialNotifications.filter((n) => n.category === "later").length)} detail="Can wait" />
+                    <MetricCard label="Low" value={String(initialNotifications.filter((n) => n.category === "low").length)} detail="Background noise" />
+                  </div>
                   <DashboardPanel title="Notification Ranking">
                     <div className="space-y-5">
                       {initialNotifications.map((notification) => (
@@ -1031,6 +1082,15 @@ function SectionPage({
         <p className="mt-4 max-w-[720px] text-lg leading-8 text-[#f0e7d9]">{description}</p>
       </section>
       <div className="mt-4">{children}</div>
+    </div>
+  );
+}
+
+function EmptyState({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="rounded-[1.15rem] border border-dashed border-white/12 bg-white/[0.02] p-5">
+      <p className="text-base text-[#efe4d6]">{title}</p>
+      <p className="mt-2 text-sm leading-7 text-[#bdb7ab]">{description}</p>
     </div>
   );
 }
