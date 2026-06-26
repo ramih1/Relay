@@ -61,6 +61,8 @@ const suggestions = [
   "3 tasks can be scheduled around your classes.",
 ];
 
+const mobileNavItems = navItems.slice(0, 5);
+
 const confirmationTabs = ["pending", "approved", "cancelled"] as const;
 type ConfirmationTab = (typeof confirmationTabs)[number];
 
@@ -228,8 +230,35 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     });
   }
 
+  const quickActions = [
+    {
+      label: "New task",
+      detail: "Add something manually",
+      onClick: () => setTaskForm((current) => ({ ...current, title: "Follow up on project outline" })),
+      href: "/tasks",
+    },
+    {
+      label: "Draft email",
+      detail: "Queue a message for approval",
+      onClick: () => {
+        setCommand("Draft an email to my professor asking for an extension");
+        submitCommand("Draft an email to my professor asking for an extension");
+      },
+      href: "/assistant",
+    },
+    {
+      label: "Plan a call",
+      detail: "Prepare a transparent call script",
+      onClick: () => {
+        setCommand("Call the gym and ask if the basketball court is free tonight");
+        submitCommand("Call the gym and ask if the basketball court is free tonight");
+      },
+      href: "/calls",
+    },
+  ];
+
   return (
-    <main className="min-h-screen bg-bg text-text">
+    <main className="min-h-screen bg-bg pb-24 text-text lg:pb-0">
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(86,211,208,0.08),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(226,190,125,0.07),_transparent_16%),radial-gradient(circle_at_center,_rgba(255,255,255,0.02),_transparent_28%)]" />
         <div className="mx-auto max-w-[1560px] px-4 py-4 sm:px-6 lg:px-8">
@@ -448,6 +477,24 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                             </span>
                             <ChevronRight className="h-4 w-4 text-muted" />
                           </button>
+                        ))}
+                      </div>
+                    </DashboardPanel>
+                  </div>
+
+                  <div className="mt-4">
+                    <DashboardPanel title="Quick Actions">
+                      <div className="grid gap-3 md:grid-cols-3">
+                        {quickActions.map((action) => (
+                          <Link
+                            key={action.label}
+                            href={action.href}
+                            onClick={action.onClick}
+                            className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] px-4 py-4 transition hover:border-[#56d3d0]/30 hover:bg-[rgba(86,211,208,0.04)]"
+                          >
+                            <p className="text-lg text-[#f4ecdf]">{action.label}</p>
+                            <p className="mt-2 text-sm leading-6 text-[#d1cabb]">{action.detail}</p>
+                          </Link>
                         ))}
                       </div>
                     </DashboardPanel>
@@ -880,6 +927,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
           </div>
         </div>
       </div>
+      <MobileNav section={section} />
     </main>
   );
 }
@@ -939,6 +987,26 @@ function TopCommandBar({
         </button>
       </div>
     </div>
+  );
+}
+
+function MobileNav({ section }: { section: NavKey }) {
+  return (
+    <nav className="mobile-dock lg:hidden">
+      {mobileNavItems.map(({ key, href, label, icon: Icon }) => (
+        <Link
+          key={key}
+          href={href}
+          className={clsx(
+            "mobile-dock-item",
+            section === key && "active",
+          )}
+        >
+          <Icon className="h-4 w-4" />
+          <span>{label}</span>
+        </Link>
+      ))}
+    </nav>
   );
 }
 

@@ -187,6 +187,47 @@ select {
   box-shadow: 0 0 0 3px rgba(86, 211, 208, 0.1);
 }
 
+.mobile-dock {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  z-index: 40;
+  display: grid;
+  width: min(calc(100% - 1.5rem), 30rem);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+  transform: translateX(-50%);
+  border: 1px solid rgba(161, 128, 74, 0.3);
+  border-radius: 1.35rem;
+  background: rgba(10, 13, 16, 0.92);
+  padding: 0.5rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(18px);
+}
+
+.mobile-dock-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 1rem;
+  padding: 0.7rem 0.3rem;
+  color: #cfcabf;
+  text-align: center;
+  text-decoration: none;
+}
+
+.mobile-dock-item span {
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
+.mobile-dock-item.active {
+  background: linear-gradient(180deg, rgba(86, 211, 208, 0.16), rgba(255, 255, 255, 0.04));
+  color: #f4ecde;
+}
+
 .orbital-art {
   pointer-events: none;
   position: absolute;
