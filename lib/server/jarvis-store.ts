@@ -9,6 +9,7 @@ import {
   initialTasks,
 } from "@/lib/data";
 import type {
+  ActionLogEntry,
   CallRequest,
   EmailDraft,
   JarvisMutationRequest,
@@ -33,6 +34,16 @@ function createInitialState(): JarvisStateSnapshot {
     assistantFeed: [
       "I can prepare reminders, email drafts, note summaries, and simulated call plans. Important actions always wait for your approval.",
     ],
+    actionLog: [
+      {
+        id: "log-seed-1",
+        title: "Demo workspace seeded",
+        detail: "Loaded starter tasks, reminders, notes, and approval items for JARVIS.",
+        category: "system",
+        impact: "info",
+        happenedAt: new Date().toISOString(),
+      },
+    ],
   };
 }
 
@@ -54,7 +65,12 @@ async function loadState(): Promise<JarvisStateSnapshot> {
 
   try {
     const raw = await readFile(STATE_FILE, "utf8");
-    inMemoryState = JSON.parse(raw) as JarvisStateSnapshot;
+    const parsed = JSON.parse(raw) as Partial<JarvisStateSnapshot>;
+    inMemoryState = {
+      ...createInitialState(),
+      ...parsed,
+      actionLog: parsed.actionLog ?? [],
+    };
   } catch {
     inMemoryState = createInitialState();
     await persistState(inMemoryState);
@@ -65,6 +81,20 @@ async function loadState(): Promise<JarvisStateSnapshot> {
 
 function appendFeed(state: JarvisStateSnapshot, message: string) {
   state.assistantFeed = [message, ...state.assistantFeed];
+}
+
+function recordEvent(
+  state: JarvisStateSnapshot,
+  entry: Omit<ActionLogEntry, "id" | "happenedAt">,
+) {
+  state.actionLog = [
+    {
+      id: crypto.randomUUID(),
+      happenedAt: new Date().toISOString(),
+      ...entry,
+    },
+    ...state.actionLog,
+  ].slice(0, 40);
 }
 
 function updateNote(state: JarvisStateSnapshot, noteId: string, updates: Partial<Note>) {
@@ -96,6 +126,12 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
     };
     state.pendingActions = [newAction, ...state.pendingActions];
     appendFeed(state, `Prepared a reminder proposal for "${input}". It is waiting in Confirmations.`);
+    recordEvent(state, {
+      title: "Reminder proposal created",
+      detail: input,
+      category: "assistant",
+      impact: "info",
+    });
     return;
   }
 
@@ -122,6 +158,12 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
     state.drafts = [newDraft, ...state.drafts];
     state.pendingActions = [newAction, ...state.pendingActions];
     appendFeed(state, "Drafted an email request and queued it for approval before saving.");
+    recordEvent(state, {
+      title: "Email draft prepared",
+      detail: newAction.description,
+      category: "assistant",
+      impact: "info",
+    });
     return;
   }
 
@@ -150,6 +192,12 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
     state.calls = [newCall, ...state.calls];
     state.pendingActions = [newAction, ...state.pendingActions];
     appendFeed(state, "Created a transparent call plan with a script and allowed actions. It is waiting for approval.");
+    recordEvent(state, {
+      title: "Call plan prepared",
+      detail: newCall.purpose,
+      category: "call",
+      impact: "warning",
+    });
     return;
   }
 
@@ -171,10 +219,22 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
     };
     state.pendingActions = [newAction, ...state.pendingActions];
     appendFeed(state, "Extracted action items from your note and sent them to Confirmations for review.");
+    recordEvent(state, {
+      title: "Tasks extracted from note",
+      detail: "Three task suggestions moved into the approval queue.",
+      category: "assistant",
+      impact: "info",
+    });
     return;
   }
 
   appendFeed(state, "I understood the request at a high level and would ask one focused follow-up before creating an action proposal in the real agent flow.");
+  recordEvent(state, {
+    title: "Assistant requested clarification",
+    detail: input,
+    category: "assistant",
+    impact: "info",
+  });
 }
 
 function approveAction(state: JarvisStateSnapshot, actionId: string) {
@@ -265,15 +325,31 @@ function approveAction(state: JarvisStateSnapshot, actionId: string) {
   state.pendingActions = state.pendingActions.map((item) =>
     item.id === action.id ? { ...item, status: "approved" } : item,
   );
+  recordEvent(state, {
+    title: "Pending action approved",
+    detail: action.title,
+    category: action.type === "place_call" ? "call" : "approval",
+    impact: "success",
+  });
 }
 
 function cancelAction(state: JarvisStateSnapshot, actionId: string) {
+  const action = state.pendingActions.find((item) => item.id === actionId);
   state.pendingActions = state.pendingActions.map((item) =>
     item.id === actionId ? { ...item, status: "cancelled" } : item,
   );
+  if (action) {
+    recordEvent(state, {
+      title: "Pending action cancelled",
+      detail: action.title,
+      category: "approval",
+      impact: "warning",
+    });
+  }
 }
 
 function updatePendingAction(state: JarvisStateSnapshot, actionId: string, updates: Partial<PendingAction>) {
+  const action = state.pendingActions.find((item) => item.id === actionId);
   state.pendingActions = state.pendingActions.map((item) =>
     item.id === actionId
       ? {
@@ -286,6 +362,14 @@ function updatePendingAction(state: JarvisStateSnapshot, actionId: string, updat
         }
       : item,
   );
+  if (action) {
+    recordEvent(state, {
+      title: "Pending action edited",
+      detail: action.title,
+      category: "approval",
+      impact: "info",
+    });
+  }
 }
 
 export async function getJarvisState(): Promise<JarvisStateSnapshot> {
@@ -304,6 +388,12 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
   switch (input.type) {
     case "reset_state":
       inMemoryState = createInitialState();
+      recordEvent(inMemoryState, {
+        title: "Demo workspace restored",
+        detail: "Reset tasks, reminders, notes, and approval items to the starter dataset.",
+        category: "system",
+        impact: "warning",
+      });
       await persistState(inMemoryState);
       return getJarvisState();
     case "submit_command":
@@ -331,14 +421,42 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
         ...state.tasks,
       ];
       appendFeed(state, `Added a new task: ${input.input.title}.`);
+      recordEvent(state, {
+        title: "Task created",
+        detail: input.input.title,
+        category: "productivity",
+        impact: "success",
+      });
       break;
     case "toggle_task":
+      {
+        const task = state.tasks.find((item) => item.id === input.taskId);
       state.tasks = state.tasks.map((task) =>
         task.id === input.taskId ? { ...task, status: task.status === "done" ? "pending" : "done" } : task,
       );
+        if (task) {
+          recordEvent(state, {
+            title: task.status === "done" ? "Task reopened" : "Task completed",
+            detail: task.title,
+            category: "productivity",
+            impact: "success",
+          });
+        }
+      }
       break;
     case "delete_task":
+      {
+        const task = state.tasks.find((item) => item.id === input.taskId);
       state.tasks = state.tasks.filter((task) => task.id !== input.taskId);
+        if (task) {
+          recordEvent(state, {
+            title: "Task deleted",
+            detail: task.title,
+            category: "productivity",
+            impact: "warning",
+          });
+        }
+      }
       break;
     case "add_note": {
       const summary =
@@ -354,10 +472,27 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
         ...state.notes,
       ];
       appendFeed(state, `Saved a new note: ${input.input.title}.`);
+      recordEvent(state, {
+        title: "Note saved",
+        detail: input.input.title,
+        category: "productivity",
+        impact: "success",
+      });
       break;
     }
     case "delete_note":
+      {
+        const note = state.notes.find((item) => item.id === input.noteId);
       state.notes = state.notes.filter((note) => note.id !== input.noteId);
+        if (note) {
+          recordEvent(state, {
+            title: "Note deleted",
+            detail: note.title,
+            category: "productivity",
+            impact: "warning",
+          });
+        }
+      }
       break;
     case "summarize_note": {
       const target = state.notes.find((note) => note.id === input.noteId);
@@ -376,6 +511,12 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
               : target.content;
         updateNote(state, input.noteId, { summary });
         appendFeed(state, `Summarized note: ${target.title}.`);
+        recordEvent(state, {
+          title: "Note summarized",
+          detail: target.title,
+          category: "assistant",
+          impact: "info",
+        });
       }
       break;
     }
@@ -391,6 +532,12 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
         if (nextTags.size === 0) nextTags.add("general");
         updateNote(state, input.noteId, { tags: Array.from(nextTags) });
         appendFeed(state, `Suggested tags for note: ${target.title}.`);
+        recordEvent(state, {
+          title: "Note tags suggested",
+          detail: target.title,
+          category: "assistant",
+          impact: "info",
+        });
       }
       break;
     }
@@ -407,22 +554,72 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
         ...state.reminders,
       ];
       appendFeed(state, `Added a reminder: ${input.input.title}.`);
+      recordEvent(state, {
+        title: "Reminder created",
+        detail: input.input.title,
+        category: "productivity",
+        impact: "success",
+      });
       break;
     case "update_reminder":
+      {
+        const reminder = state.reminders.find((item) => item.id === input.reminderId);
       state.reminders = state.reminders.map((reminder) =>
         reminder.id === input.reminderId ? { ...reminder, ...input.updates } : reminder,
       );
+        if (reminder) {
+          recordEvent(state, {
+            title: "Reminder updated",
+            detail: reminder.title,
+            category: "productivity",
+            impact: "info",
+          });
+        }
+      }
       break;
     case "delete_reminder":
+      {
+        const reminder = state.reminders.find((item) => item.id === input.reminderId);
       state.reminders = state.reminders.filter((reminder) => reminder.id !== input.reminderId);
+        if (reminder) {
+          recordEvent(state, {
+            title: "Reminder deleted",
+            detail: reminder.title,
+            category: "productivity",
+            impact: "warning",
+          });
+        }
+      }
       break;
     case "save_draft":
+      {
+        const draft = state.drafts.find((item) => item.id === input.draftId);
       state.drafts = state.drafts.map((draft) =>
         draft.id === input.draftId ? { ...draft, ...input.updates } : draft,
       );
+        if (draft) {
+          recordEvent(state, {
+            title: "Draft updated",
+            detail: draft.subject,
+            category: "productivity",
+            impact: "info",
+          });
+        }
+      }
       break;
     case "delete_draft":
+      {
+        const draft = state.drafts.find((item) => item.id === input.draftId);
       state.drafts = state.drafts.filter((draft) => draft.id !== input.draftId);
+        if (draft) {
+          recordEvent(state, {
+            title: "Draft deleted",
+            detail: draft.subject,
+            category: "productivity",
+            impact: "warning",
+          });
+        }
+      }
       break;
     case "create_call_followups": {
       const call = state.calls.find((item) => item.id === input.callId);
@@ -441,6 +638,12 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
         };
         state.pendingActions = [newAction, ...state.pendingActions];
         appendFeed(state, `Prepared a follow-up reminder based on the ${call.contactName} call summary.`);
+        recordEvent(state, {
+          title: "Follow-up proposal created",
+          detail: call.contactName,
+          category: "call",
+          impact: "info",
+        });
       }
       break;
     }

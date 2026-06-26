@@ -10,6 +10,7 @@ import {
   initialTasks,
 } from "@/lib/data";
 import type {
+  ActionLogEntry,
   EmailDraft,
   JarvisMutationRequest,
   JarvisStateSnapshot,
@@ -46,6 +47,7 @@ type JarvisStore = {
   calls: JarvisStateSnapshot["calls"];
   pendingActions: PendingAction[];
   assistantFeed: string[];
+  actionLog: ActionLogEntry[];
   submitCommand: (input: string) => Promise<void>;
   approveAction: (actionId: string) => Promise<void>;
   cancelAction: (actionId: string) => Promise<void>;
@@ -77,6 +79,7 @@ const fallbackState: JarvisStateSnapshot = {
   assistantFeed: [
     "I can prepare reminders, email drafts, note summaries, and simulated call plans. Important actions always wait for your approval.",
   ],
+  actionLog: [],
 };
 
 const JarvisContext = createContext<JarvisStore | null>(null);

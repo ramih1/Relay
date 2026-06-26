@@ -87,6 +87,15 @@ export type PendingAction = {
   payload: Record<string, unknown>;
 };
 
+export type ActionLogEntry = {
+  id: string;
+  title: string;
+  detail: string;
+  category: "assistant" | "approval" | "call" | "productivity" | "system";
+  impact: "info" | "success" | "warning";
+  happenedAt: string;
+};
+
 export type JarvisStateSnapshot = {
   tasks: Task[];
   notes: Note[];
@@ -95,6 +104,7 @@ export type JarvisStateSnapshot = {
   calls: CallRequest[];
   pendingActions: PendingAction[];
   assistantFeed: string[];
+  actionLog: ActionLogEntry[];
 };
 
 export type JarvisMutationRequest =

@@ -96,6 +96,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     calls,
     pendingActions,
     assistantFeed,
+    actionLog,
     submitCommand,
     approveAction,
     cancelAction,
@@ -674,6 +675,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         value={String(calls.filter((call) => call.status === "simulated").length)}
                         detail="Ready for follow-up"
                       />
+                      <MetricCard label="Audit events" value={String(actionLog.length)} detail="Server-recorded trail" />
                     </div>
                   </div>
 
@@ -916,6 +918,17 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           <li>• Medium risk: reminders, drafts, and extracted tasks.</li>
                           <li>• High risk: calls and future external integrations.</li>
                         </ul>
+                      </DashboardPanel>
+                      <DashboardPanel title="Execution Trail">
+                        {actionLog.length > 0 ? (
+                          <div className="space-y-3">
+                            {actionLog.slice(0, 5).map((entry) => (
+                              <AuditLogRow key={entry.id} entry={entry} />
+                            ))}
+                          </div>
+                        ) : (
+                          <EmptyState title="No audit events yet" description="Approvals, cancellations, and assistant-generated actions will leave a trace here." />
+                        )}
                       </DashboardPanel>
                     </div>
                   </div>
@@ -1463,6 +1476,35 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function AuditLogRow({
+  entry,
+}: {
+  entry: {
+    title: string;
+    detail: string;
+    category: string;
+    impact: "info" | "success" | "warning";
+    happenedAt: string;
+  };
+}) {
+  return (
+    <div className="app-card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="accent-copy text-xs uppercase tracking-[0.18em]">{entry.category}</p>
+          <p className="title-main mt-2 text-base">{entry.title}</p>
+          <p className="copy-soft mt-2 text-sm leading-6">{entry.detail}</p>
+        </div>
+        <StatusPill
+          value={entry.impact}
+          tone={entry.impact === "success" ? "success" : entry.impact === "warning" ? "warning" : "neutral"}
+        />
+      </div>
+      <p className="copy-soft mt-3 text-xs uppercase tracking-[0.16em]">{formatAuditTime(entry.happenedAt)}</p>
+    </div>
+  );
+}
+
 function ActivityRow({
   label,
   detail,
@@ -1888,4 +1930,18 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
       <p className="mt-2 text-sm text-muted">{detail}</p>
     </div>
   );
+}
+
+function formatAuditTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
