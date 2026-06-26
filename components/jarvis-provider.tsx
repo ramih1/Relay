@@ -30,6 +30,13 @@ type NewNoteInput = {
   content: string;
 };
 
+type NewReminderInput = {
+  title: string;
+  when: string;
+  repeat: Reminder["repeat"];
+  priority: Reminder["priority"];
+};
+
 type JarvisStore = {
   tasks: Task[];
   notes: Note[];
@@ -47,6 +54,11 @@ type JarvisStore = {
   deleteTask: (taskId: string) => void;
   addNote: (input: NewNoteInput) => void;
   deleteNote: (noteId: string) => void;
+  addReminder: (input: NewReminderInput) => void;
+  updateReminder: (reminderId: string, updates: Partial<Reminder>) => void;
+  deleteReminder: (reminderId: string) => void;
+  saveDraft: (draftId: string, updates: Partial<EmailDraft>) => void;
+  deleteDraft: (draftId: string) => void;
 };
 
 type PersistedState = Pick<
@@ -258,8 +270,8 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
           id: crypto.randomUUID(),
           title: String(action.payload.title ?? "Untitled reminder"),
           when: String(action.payload.when ?? "TBD"),
-          repeat: "none",
-          priority: "high",
+          repeat: (action.payload.repeat as Reminder["repeat"]) ?? "none",
+          priority: (action.payload.priority as Reminder["priority"]) ?? "high",
           status: "active",
         },
         ...current,
@@ -400,6 +412,55 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     setNotes((current) => current.filter((note) => note.id !== noteId));
   }
 
+  function addReminder(input: NewReminderInput) {
+    setReminders((current) => [
+      {
+        id: crypto.randomUUID(),
+        title: input.title,
+        when: input.when,
+        repeat: input.repeat,
+        priority: input.priority,
+        status: "active",
+      },
+      ...current,
+    ]);
+    setAssistantFeed((current) => [`Added a reminder: ${input.title}.`, ...current]);
+  }
+
+  function updateReminder(reminderId: string, updates: Partial<Reminder>) {
+    setReminders((current) =>
+      current.map((reminder) =>
+        reminder.id === reminderId
+          ? {
+              ...reminder,
+              ...updates,
+            }
+          : reminder,
+      ),
+    );
+  }
+
+  function deleteReminder(reminderId: string) {
+    setReminders((current) => current.filter((reminder) => reminder.id !== reminderId));
+  }
+
+  function saveDraft(draftId: string, updates: Partial<EmailDraft>) {
+    setDrafts((current) =>
+      current.map((draft) =>
+        draft.id === draftId
+          ? {
+              ...draft,
+              ...updates,
+            }
+          : draft,
+      ),
+    );
+  }
+
+  function deleteDraft(draftId: string) {
+    setDrafts((current) => current.filter((draft) => draft.id !== draftId));
+  }
+
   const value = useMemo<JarvisStore>(
     () => ({
       tasks,
@@ -418,6 +479,11 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       deleteTask,
       addNote,
       deleteNote,
+      addReminder,
+      updateReminder,
+      deleteReminder,
+      saveDraft,
+      deleteDraft,
     }),
     [assistantFeed, calls, drafts, notes, pendingActions, reminders, tasks],
   );

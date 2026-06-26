@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { initialNotifications } from "@/lib/data";
-import type { NavKey, Note, NotificationItem, PendingAction, Task } from "@/lib/types";
+import type { EmailDraft, NavKey, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
 import { useJarvis } from "@/components/jarvis-provider";
 
 const navItems: { key: NavKey; label: string; href: string; icon: ComponentType<{ className?: string }> }[] = [
@@ -79,12 +79,24 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     deleteTask,
     addNote,
     deleteNote,
+    addReminder,
+    updateReminder,
+    deleteReminder,
+    saveDraft,
+    deleteDraft,
   } = useJarvis();
 
   const [command, setCommand] = useState("");
   const [taskForm, setTaskForm] = useState({ title: "", due: "", priority: "medium" as Task["priority"], description: "" });
   const [noteForm, setNoteForm] = useState({ title: "", content: "" });
+  const [reminderForm, setReminderForm] = useState({
+    title: "",
+    when: "",
+    repeat: "none" as Reminder["repeat"],
+    priority: "medium" as Reminder["priority"],
+  });
   const [selectedNoteId, setSelectedNoteId] = useState<string>(notes[0]?.id ?? "");
+  const [selectedDraftId, setSelectedDraftId] = useState<string>(drafts[0]?.id ?? "");
 
   const pendingApprovals = pendingActions.filter((item) => item.status === "pending");
   const pendingCount = pendingApprovals.length;
@@ -94,6 +106,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const pendingDraftCount = drafts.filter((draft) => draft.status === "draft").length;
   const pendingCallCount = calls.filter((call) => call.status === "pending").length;
   const notesPreview = notes.find((note) => note.id === selectedNoteId) ?? notes[0];
+  const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) ?? drafts[0];
   const todayBrief = `You have ${activeReminderCount} reminders, ${overdueCount} overdue task${overdueCount === 1 ? "" : "s"}, ${pendingDraftCount} email draft${pendingDraftCount === 1 ? "" : "s"} waiting for approval, and ${pendingCallCount} call request${pendingCallCount === 1 ? "" : "s"} ready to confirm.`;
 
   const filteredTaskGroups = useMemo(
@@ -136,6 +149,26 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
     addNote({ title: noteForm.title.trim(), content: noteForm.content.trim() });
     setNoteForm({ title: "", content: "" });
+  }
+
+  function handleAddReminder() {
+    if (!reminderForm.title.trim() || !reminderForm.when.trim()) {
+      return;
+    }
+
+    addReminder({
+      title: reminderForm.title.trim(),
+      when: reminderForm.when.trim(),
+      repeat: reminderForm.repeat,
+      priority: reminderForm.priority,
+    });
+
+    setReminderForm({
+      title: "",
+      when: "",
+      repeat: "none",
+      priority: "medium",
+    });
   }
 
   return (
@@ -560,26 +593,109 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       </div>
                     </DashboardPanel>
                   </div>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+                    <DashboardPanel title="Email Drafts">
+                      <div className="space-y-3">
+                        {drafts.map((draft) => (
+                          <button
+                            key={draft.id}
+                            type="button"
+                            onClick={() => setSelectedDraftId(draft.id)}
+                            className={clsx(
+                              "w-full rounded-[1.1rem] border px-4 py-4 text-left transition",
+                              selectedDraft?.id === draft.id
+                                ? "border-[#56d3d0]/40 bg-[rgba(86,211,208,0.08)]"
+                                : "border-white/8 bg-white/[0.03] hover:border-[#a07f43]/40",
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-base text-[#f3ebde]">{draft.subject}</p>
+                                <p className="mt-1 text-sm text-muted">{draft.recipient}</p>
+                              </div>
+                              <StatusPill value={draft.status} tone={draft.status === "approved" ? "success" : "warning"} />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </DashboardPanel>
+
+                    <DashboardPanel title={selectedDraft ? "Draft Editor" : "Draft Editor"}>
+                      {selectedDraft ? (
+                        <DraftEditor draft={selectedDraft} onSave={saveDraft} onDelete={deleteDraft} />
+                      ) : (
+                        <p className="text-sm text-muted">Create or approve an email draft to edit it here.</p>
+                      )}
+                    </DashboardPanel>
+                  </div>
                 </SectionPage>
               ) : null}
 
               {section === "reminders" ? (
-                <SectionPage eyebrow="Reminders" title="Keep commitments visible." description="Simple repeat rules, priority levels, and approval-backed AI reminders are already part of the MVP flow.">
-                  <DashboardPanel title="Active Reminders">
-                    <div className="space-y-3">
-                      {reminders.map((reminder) => (
-                        <div key={reminder.id} className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-lg text-[#f5eee3]">{reminder.title}</p>
-                              <p className="mt-1 text-sm text-muted">{reminder.when}</p>
-                            </div>
-                            <StatusPill value={reminder.priority} tone={reminder.priority === "high" ? "danger" : "warning"} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </DashboardPanel>
+                <SectionPage eyebrow="Reminders" title="Keep commitments visible." description="You can now add reminders directly, snooze them, mark them done, and manage repeat rules from the app.">
+                  <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+                    <DashboardPanel title="Reminder Builder">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <input value={reminderForm.title} onChange={(e) => setReminderForm((c) => ({ ...c, title: e.target.value }))} placeholder="Reminder title" className="field-input md:col-span-2" />
+                        <input value={reminderForm.when} onChange={(e) => setReminderForm((c) => ({ ...c, when: e.target.value }))} placeholder="When should JARVIS remind you?" className="field-input" />
+                        <select value={reminderForm.repeat} onChange={(e) => setReminderForm((c) => ({ ...c, repeat: e.target.value as Reminder["repeat"] }))} className="field-input">
+                          <option value="none">No repeat</option>
+                          <option value="daily">Daily</option>
+                          <option value="weekly">Weekly</option>
+                          <option value="monthly">Monthly</option>
+                        </select>
+                        <select value={reminderForm.priority} onChange={(e) => setReminderForm((c) => ({ ...c, priority: e.target.value as Reminder["priority"] }))} className="field-input md:col-span-2">
+                          <option value="low">Low priority</option>
+                          <option value="medium">Medium priority</option>
+                          <option value="high">High priority</option>
+                        </select>
+                      </div>
+                      <div className="mt-4">
+                        <button type="button" className="jarvis-button" onClick={handleAddReminder}>
+                          Create Reminder
+                        </button>
+                      </div>
+                    </DashboardPanel>
+
+                    <DashboardPanel title="Reminder Snapshot">
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <MetricCard label="Active" value={String(reminders.filter((r) => r.status === "active").length)} detail="Ready to notify" />
+                        <MetricCard label="Snoozed" value={String(reminders.filter((r) => r.status === "snoozed").length)} detail="Deferred briefly" />
+                        <MetricCard label="Done" value={String(reminders.filter((r) => r.status === "done").length)} detail="Completed or cleared" />
+                      </div>
+                    </DashboardPanel>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                    <DashboardPanel title="Active">
+                      <div className="space-y-3">
+                        {reminders
+                          .filter((reminder) => reminder.status === "active")
+                          .map((reminder) => (
+                            <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
+                          ))}
+                      </div>
+                    </DashboardPanel>
+                    <DashboardPanel title="Snoozed">
+                      <div className="space-y-3">
+                        {reminders
+                          .filter((reminder) => reminder.status === "snoozed")
+                          .map((reminder) => (
+                            <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
+                          ))}
+                      </div>
+                    </DashboardPanel>
+                    <DashboardPanel title="Done">
+                      <div className="space-y-3">
+                        {reminders
+                          .filter((reminder) => reminder.status === "done")
+                          .map((reminder) => (
+                            <ReminderCard key={reminder.id} reminder={reminder} onUpdate={updateReminder} onDelete={deleteReminder} />
+                          ))}
+                      </div>
+                    </DashboardPanel>
+                  </div>
                 </SectionPage>
               ) : null}
 
@@ -862,6 +978,105 @@ function NotePreviewCard({ note }: { note: Note }) {
             <li key={line}>• {line.trim()}</li>
           ))}
       </ul>
+    </div>
+  );
+}
+
+function ReminderCard({
+  reminder,
+  onUpdate,
+  onDelete,
+}: {
+  reminder: Reminder;
+  onUpdate: (reminderId: string, updates: Partial<Reminder>) => void;
+  onDelete: (reminderId: string) => void;
+}) {
+  return (
+    <div className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-lg text-[#f5eee3]">{reminder.title}</p>
+          <p className="mt-1 text-sm text-muted">{reminder.when}</p>
+          <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#9fd9d7]">Repeats {reminder.repeat}</p>
+        </div>
+        <StatusPill
+          value={reminder.priority}
+          tone={reminder.priority === "high" ? "danger" : reminder.priority === "medium" ? "warning" : "neutral"}
+        />
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {reminder.status !== "done" ? (
+          <button type="button" className="small-action primary" onClick={() => onUpdate(reminder.id, { status: "done" })}>
+            Mark done
+          </button>
+        ) : null}
+        {reminder.status !== "snoozed" ? (
+          <button type="button" className="small-action" onClick={() => onUpdate(reminder.id, { status: "snoozed", when: `Snoozed • ${reminder.when}` })}>
+            Snooze
+          </button>
+        ) : (
+          <button type="button" className="small-action" onClick={() => onUpdate(reminder.id, { status: "active", when: reminder.when.replace(/^Snoozed • /, "") })}>
+            Reactivate
+          </button>
+        )}
+        <button type="button" className="small-action" onClick={() => onDelete(reminder.id)}>
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DraftEditor({
+  draft,
+  onSave,
+  onDelete,
+}: {
+  draft: EmailDraft;
+  onSave: (draftId: string, updates: Partial<EmailDraft>) => void;
+  onDelete: (draftId: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <input
+        value={draft.recipient}
+        onChange={(e) => onSave(draft.id, { recipient: e.target.value })}
+        placeholder="Recipient"
+        className="field-input"
+      />
+      <input
+        value={draft.subject}
+        onChange={(e) => onSave(draft.id, { subject: e.target.value })}
+        placeholder="Subject"
+        className="field-input"
+      />
+      <select
+        value={draft.tone}
+        onChange={(e) => onSave(draft.id, { tone: e.target.value as EmailDraft["tone"] })}
+        className="field-input"
+      >
+        <option value="professional">Professional</option>
+        <option value="friendly">Friendly</option>
+        <option value="short">Short</option>
+        <option value="formal">Formal</option>
+      </select>
+      <textarea
+        value={draft.body}
+        onChange={(e) => onSave(draft.id, { body: e.target.value })}
+        placeholder="Draft body"
+        className="field-input min-h-56"
+      />
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="small-action primary" onClick={() => onSave(draft.id, { status: "approved" })}>
+          Save Approved
+        </button>
+        <button type="button" className="small-action" onClick={() => onSave(draft.id, { status: "draft" })}>
+          Keep as Draft
+        </button>
+        <button type="button" className="small-action" onClick={() => onDelete(draft.id)}>
+          Delete Draft
+        </button>
+      </div>
     </div>
   );
 }
