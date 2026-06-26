@@ -61,6 +61,9 @@ const suggestions = [
   "3 tasks can be scheduled around your classes.",
 ];
 
+const confirmationTabs = ["pending", "approved", "cancelled"] as const;
+type ConfirmationTab = (typeof confirmationTabs)[number];
+
 export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const {
     tasks,
@@ -100,6 +103,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   });
   const [selectedNoteId, setSelectedNoteId] = useState<string>(notes[0]?.id ?? "");
   const [selectedDraftId, setSelectedDraftId] = useState<string>(drafts[0]?.id ?? "");
+  const [confirmationTab, setConfirmationTab] = useState<ConfirmationTab>("pending");
 
   const pendingApprovals = pendingActions.filter((item) => item.status === "pending");
   const pendingCount = pendingApprovals.length;
@@ -110,7 +114,6 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const pendingCallCount = calls.filter((call) => call.status === "pending").length;
   const notesPreview = notes.find((note) => note.id === selectedNoteId) ?? notes[0];
   const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) ?? drafts[0];
-  const todayBrief = `You have ${activeReminderCount} reminders, ${overdueCount} overdue task${overdueCount === 1 ? "" : "s"}, ${pendingDraftCount} email draft${pendingDraftCount === 1 ? "" : "s"} waiting for approval, and ${pendingCallCount} call request${pendingCallCount === 1 ? "" : "s"} ready to confirm.`;
 
   const filteredTaskGroups = useMemo(
     () => ({
@@ -121,6 +124,57 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     }),
     [tasks],
   );
+
+  const confirmationGroups = useMemo(
+    () => ({
+      pending: pendingActions.filter((item) => item.status === "pending"),
+      approved: pendingActions.filter((item) => item.status === "approved"),
+      cancelled: pendingActions.filter((item) => item.status === "cancelled"),
+    }),
+    [pendingActions],
+  );
+
+  const activeConfirmationList = confirmationGroups[confirmationTab];
+
+  const todayBrief = useMemo(() => {
+    const lines: string[] = [];
+
+    if (overdueCount > 0) {
+      lines.push(`${overdueCount} overdue task${overdueCount === 1 ? "" : "s"} need attention`);
+    }
+    if (pendingCount > 0) {
+      lines.push(`${pendingCount} approval${pendingCount === 1 ? "" : "s"} are waiting`);
+    }
+    if (pendingDraftCount > 0) {
+      lines.push(`${pendingDraftCount} email draft${pendingDraftCount === 1 ? "" : "s"} still need review`);
+    }
+    if (pendingCallCount > 0) {
+      lines.push(`${pendingCallCount} call plan${pendingCallCount === 1 ? "" : "s"} are ready to confirm`);
+    }
+    if (activeReminderCount > 0) {
+      lines.push(`${activeReminderCount} active reminder${activeReminderCount === 1 ? "" : "s"} are scheduled`);
+    }
+    if (lines.length === 0) {
+      return "Your workspace looks clear right now. Good time to plan ahead or ask JARVIS to prepare your next move.";
+    }
+
+    const first = lines[0];
+    const rest = lines.slice(1);
+    return rest.length > 0 ? `${first}, and ${rest.join(", ")}.` : `${first}.`;
+  }, [activeReminderCount, overdueCount, pendingCount, pendingDraftCount, pendingCallCount]);
+
+  const briefFocus = useMemo(() => {
+    if (overdueCount > 0) {
+      return "Start by clearing the overdue work so the rest of the day feels lighter.";
+    }
+    if (pendingCount > 0) {
+      return "Your approval queue is the highest leverage place to unblock JARVIS.";
+    }
+    if (highPriorityTasks.length > 0) {
+      return "You already know the high-priority tasks. A short focus block would move today forward.";
+    }
+    return "You have room to plan. Try drafting a reminder, message, or call plan from the assistant bar.";
+  }, [highPriorityTasks.length, overdueCount, pendingCount]);
 
   function handleSubmitCommand() {
     if (!command.trim()) {
@@ -267,6 +321,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <StatChip icon={Clock3} value={overdueCount} label="Overdue Task" tone="rose" />
                         <StatChip icon={Mail} value={pendingDraftCount} label="Email Draft" tone="gold" />
                         <StatChip icon={PhoneCall} value={pendingCallCount} label="Call Request" tone="teal" />
+                      </div>
+                      <div className="mt-5 rounded-[1.15rem] border border-white/8 bg-white/[0.03] px-4 py-4">
+                        <p className="text-sm uppercase tracking-[0.2em] text-[#56d3d0]">Focus suggestion</p>
+                        <p className="mt-2 text-sm leading-7 text-[#ebe1d4]">{briefFocus}</p>
                       </div>
                     </section>
 
@@ -546,22 +604,49 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               {section === "confirmations" ? (
                 <SectionPage eyebrow="Approval Center" title="Review and edit actions before they happen." description="You can now adjust reminder details and extracted tasks right inside the approval queue before approving them.">
                   <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-                    <DashboardPanel title={`Pending Actions (${pendingApprovals.length})`}>
-                      <div className="space-y-4">
-                        {pendingApprovals.map((action) => (
-                          <EditableConfirmationCard
-                            key={action.id}
-                            action={action}
-                            onChange={updatePendingAction}
-                            onApprove={() => approveAction(action.id)}
-                            onCancel={() => cancelAction(action.id)}
-                          />
+                    <DashboardPanel title="Action History">
+                      <div className="mb-4 flex flex-wrap gap-2">
+                        {confirmationTabs.map((tab) => (
+                          <button
+                            key={tab}
+                            type="button"
+                            onClick={() => setConfirmationTab(tab)}
+                            className={clsx(
+                              "small-action",
+                              confirmationTab === tab && "primary",
+                            )}
+                          >
+                            {tab} ({confirmationGroups[tab].length})
+                          </button>
                         ))}
                       </div>
+
+                      {activeConfirmationList.length > 0 ? (
+                        <div className="space-y-4">
+                          {activeConfirmationList.map((action) =>
+                            action.status === "pending" ? (
+                              <EditableConfirmationCard
+                                key={action.id}
+                                action={action}
+                                onChange={updatePendingAction}
+                                onApprove={() => approveAction(action.id)}
+                                onCancel={() => cancelAction(action.id)}
+                              />
+                            ) : (
+                              <HistoryConfirmationCard key={action.id} action={action} />
+                            ),
+                          )}
+                        </div>
+                      ) : (
+                        <div className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-5 text-sm leading-7 text-[#ddd5c8]">
+                          No {confirmationTab} actions yet.
+                        </div>
+                      )}
                     </DashboardPanel>
 
                     <div className="space-y-4">
                       <MetricCard label="Awaiting review" value={String(pendingCount)} detail="Nothing executes automatically" />
+                      <MetricCard label="Approved" value={String(confirmationGroups.approved.length)} detail="Actions already accepted" />
                       <DashboardPanel title="Approval Rules">
                         <ul className="space-y-3 text-sm leading-7 text-[#e5ddd0]">
                           <li>• Low risk: summaries, tags, and note insights.</li>
@@ -1216,6 +1301,31 @@ function EditableConfirmationCard({
               Cancel
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistoryConfirmationCard({ action }: { action: PendingAction }) {
+  return (
+    <div className="rounded-[1.15rem] border border-white/8 bg-white/[0.03] p-4">
+      <div className="flex items-start gap-3">
+        <div className={clsx("mt-0.5 rounded-[0.8rem] px-3 py-2 text-sm", iconToneClass(action.type))}>{iconSymbol(action.type)}</div>
+        <div className="flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-base text-[#f4eee3]">{action.title}</p>
+              <p className="mt-1 text-sm text-muted">{action.description}</p>
+            </div>
+            <StatusPill
+              value={action.status}
+              tone={action.status === "approved" ? "success" : "neutral"}
+            />
+          </div>
+          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[#9c988f]">
+            Risk: {action.risk}
+          </p>
         </div>
       </div>
     </div>
