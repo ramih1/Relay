@@ -84,6 +84,9 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     deleteReminder,
     saveDraft,
     deleteDraft,
+    summarizeNote,
+    suggestNoteTags,
+    createCallFollowups,
   } = useJarvis();
 
   const [command, setCommand] = useState("");
@@ -523,10 +526,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                             {notesPreview.content}
                           </p>
                           <div className="grid gap-3 md:grid-cols-3">
-                            <button type="button" className="soft-outline">
+                            <button type="button" className="soft-outline" onClick={() => summarizeNote(notesPreview.id)}>
                               Summarize
                             </button>
-                            <button type="button" className="soft-outline">
+                            <button type="button" className="soft-outline" onClick={() => suggestNoteTags(notesPreview.id)}>
                               Suggest Tags
                             </button>
                             <button type="button" className="jarvis-button" onClick={() => submitCommand("Turn this note into tasks")}>
@@ -740,6 +743,16 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <pre className="mt-4 whitespace-pre-wrap rounded-[1rem] border border-white/8 bg-[#111719]/75 p-4 text-xs leading-7 text-[#d7d0c4]">
                           {calls[0].transcript}
                         </pre>
+                      ) : null}
+                      {calls[0]?.status === "simulated" ? (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button type="button" className="small-action primary" onClick={() => createCallFollowups(calls[0].id)}>
+                            Create follow-ups
+                          </button>
+                          <button type="button" className="small-action" onClick={() => submitCommand("Remind me to leave for the gym at 6:45 PM")}>
+                            Quick reminder
+                          </button>
+                        </div>
                       ) : null}
                     </DashboardPanel>
                   </div>

@@ -53,12 +53,16 @@ type JarvisStore = {
   toggleTask: (taskId: string) => void;
   deleteTask: (taskId: string) => void;
   addNote: (input: NewNoteInput) => void;
+  updateNote: (noteId: string, updates: Partial<Note>) => void;
   deleteNote: (noteId: string) => void;
   addReminder: (input: NewReminderInput) => void;
   updateReminder: (reminderId: string, updates: Partial<Reminder>) => void;
   deleteReminder: (reminderId: string) => void;
   saveDraft: (draftId: string, updates: Partial<EmailDraft>) => void;
   deleteDraft: (draftId: string) => void;
+  summarizeNote: (noteId: string) => void;
+  suggestNoteTags: (noteId: string) => void;
+  createCallFollowups: (callId: string) => void;
 };
 
 type PersistedState = Pick<
@@ -295,6 +299,20 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       ]);
     }
 
+    if (action.type === "create_task") {
+      setTasks((current) => [
+        {
+          id: crypto.randomUUID(),
+          title: String(action.payload.title ?? "Follow-up task"),
+          due: String(action.payload.due ?? "Tomorrow, 12:00 PM"),
+          priority: (action.payload.priority as Task["priority"]) ?? "medium",
+          description: String(action.payload.description ?? ""),
+          status: "pending",
+        },
+        ...current,
+      ]);
+    }
+
     if (action.type === "draft_email") {
       const draftId = String(action.payload.draftId);
       setDrafts((current) =>
@@ -408,8 +426,73 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     setAssistantFeed((current) => [`Saved a new note: ${input.title}.`, ...current]);
   }
 
+  function updateNote(noteId: string, updates: Partial<Note>) {
+    setNotes((current) =>
+      current.map((note) =>
+        note.id === noteId
+          ? {
+              ...note,
+              ...updates,
+            }
+          : note,
+      ),
+    );
+  }
+
   function deleteNote(noteId: string) {
     setNotes((current) => current.filter((note) => note.id !== noteId));
+  }
+
+  function summarizeNote(noteId: string) {
+    const target = notes.find((note) => note.id === noteId);
+    if (!target) {
+      return;
+    }
+
+    const cleaned = target.content.replace(/^Messy notes:\s*/i, "");
+    const parts = cleaned
+      .split(/[,.]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    const summary =
+      parts.length > 0
+        ? `Key points: ${parts.join(", ")}.`
+        : target.content.length > 140
+          ? `${target.content.slice(0, 137)}...`
+          : target.content;
+
+    updateNote(noteId, { summary });
+    setAssistantFeed((current) => [`Summarized note: ${target.title}.`, ...current]);
+  }
+
+  function suggestNoteTags(noteId: string) {
+    const target = notes.find((note) => note.id === noteId);
+    if (!target) {
+      return;
+    }
+
+    const lower = `${target.title} ${target.content}`.toLowerCase();
+    const nextTags = new Set<string>();
+
+    if (/(professor|assignment|lecture|class|research|project)/.test(lower)) {
+      nextTags.add("school");
+    }
+    if (/(gym|basketball|workout|fitness)/.test(lower)) {
+      nextTags.add("health");
+    }
+    if (/(email|team|meeting|internship|work)/.test(lower)) {
+      nextTags.add("work");
+    }
+    if (/(laundry|apartment|errand|parcel|budget)/.test(lower)) {
+      nextTags.add("life");
+    }
+    if (nextTags.size === 0) {
+      nextTags.add("general");
+    }
+
+    updateNote(noteId, { tags: Array.from(nextTags) });
+    setAssistantFeed((current) => [`Suggested tags for note: ${target.title}.`, ...current]);
   }
 
   function addReminder(input: NewReminderInput) {
@@ -461,6 +544,47 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     setDrafts((current) => current.filter((draft) => draft.id !== draftId));
   }
 
+  function createCallFollowups(callId: string) {
+    const call = calls.find((item) => item.id === callId);
+    if (!call) {
+      return;
+    }
+
+    const reminderAction: PendingAction = {
+      id: crypto.randomUUID(),
+      type: "create_followup_task",
+      title: `Reminder from ${call.contactName}`,
+      description: "Leave around 6:45 PM if you want to make the 7:30 opening.",
+      risk: "medium",
+      status: "pending",
+      payload: {
+        title: "Leave for the gym",
+        when: "Today, 6:45 PM",
+      },
+    };
+
+    const taskAction: PendingAction = {
+      id: crypto.randomUUID(),
+      type: "create_task",
+      title: `Plan around ${call.contactName}`,
+      description: "Create a quick plan based on the call result.",
+      risk: "medium",
+      status: "pending",
+      payload: {
+        title: "Text friends about basketball at 7:30",
+        due: "Today, 5:30 PM",
+        priority: "medium",
+        description: "Share the court timing from the gym call summary.",
+      },
+    };
+
+    setPendingActions((current) => [taskAction, reminderAction, ...current]);
+    setAssistantFeed((current) => [
+      `Prepared follow-up suggestions from the ${call.contactName} call. They are waiting in Confirmations.`,
+      ...current,
+    ]);
+  }
+
   const value = useMemo<JarvisStore>(
     () => ({
       tasks,
@@ -478,12 +602,16 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       toggleTask,
       deleteTask,
       addNote,
+      updateNote,
       deleteNote,
       addReminder,
       updateReminder,
       deleteReminder,
       saveDraft,
       deleteDraft,
+      summarizeNote,
+      suggestNoteTags,
+      createCallFollowups,
     }),
     [assistantFeed, calls, drafts, notes, pendingActions, reminders, tasks],
   );
