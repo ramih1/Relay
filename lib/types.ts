@@ -31,6 +31,16 @@ export type Reminder = {
   status: "active" | "snoozed" | "done";
 };
 
+export type CalendarEvent = {
+  id: string;
+  title: string;
+  detail: string;
+  start: string;
+  end: string;
+  location?: string;
+  tone: "teal" | "gold" | "rose";
+};
+
 export type Note = {
   id: string;
   title: string;
@@ -100,6 +110,7 @@ export type JarvisStateSnapshot = {
   tasks: Task[];
   notes: Note[];
   reminders: Reminder[];
+  calendarEvents: CalendarEvent[];
   drafts: EmailDraft[];
   calls: CallRequest[];
   pendingActions: PendingAction[];
@@ -151,6 +162,18 @@ export type JarvisMutationRequest =
         priority: Reminder["priority"];
       };
     }
+  | {
+      type: "add_calendar_event";
+      input: {
+        title: string;
+        detail: string;
+        start: string;
+        end: string;
+        location?: string;
+        tone: CalendarEvent["tone"];
+      };
+    }
+  | { type: "delete_calendar_event"; eventId: string }
   | { type: "update_reminder"; reminderId: string; updates: Partial<Reminder> }
   | { type: "delete_reminder"; reminderId: string }
   | { type: "save_draft"; draftId: string; updates: Partial<EmailDraft> }

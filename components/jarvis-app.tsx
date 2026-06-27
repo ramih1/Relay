@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { initialNotifications } from "@/lib/data";
-import type { DashboardInsightSnapshot, EmailDraft, NavKey, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
+import type { CalendarEvent, DashboardInsightSnapshot, EmailDraft, NavKey, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
 import { useJarvis } from "@/components/jarvis-provider";
 
 const navItems: { key: NavKey; label: string; href: string; icon: ComponentType<{ className?: string }> }[] = [
@@ -49,13 +49,6 @@ const commandSamples = [
   "Turn this note into tasks",
   "Call the gym and ask if the basketball court is free tonight",
 ];
-
-const scheduleItems = [
-  { time: "9:00 AM", title: "Data Structures Lecture", detail: "CS Building, Room 301", tone: "teal" },
-  { time: "11:00 AM", title: "Study Group", detail: "Library, Room 2B", tone: "teal" },
-  { time: "3:00 PM", title: "Project Meeting", detail: "Online • Google Meet", tone: "gold" },
-  { time: "6:30 PM", title: "Gym", detail: "Fitness Session", tone: "teal" },
-] as const;
 
 const mobileNavItems = navItems.slice(0, 5);
 
@@ -86,6 +79,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     tasks,
     notes,
     reminders,
+    calendarEvents,
     drafts,
     calls,
     pendingActions,
@@ -101,6 +95,8 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     addNote,
     deleteNote,
     addReminder,
+    addCalendarEvent,
+    deleteCalendarEvent,
     updateReminder,
     deleteReminder,
     saveDraft,
@@ -119,6 +115,14 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     when: "",
     repeat: "none" as Reminder["repeat"],
     priority: "medium" as Reminder["priority"],
+  });
+  const [calendarForm, setCalendarForm] = useState({
+    title: "",
+    detail: "",
+    start: "",
+    end: "",
+    location: "",
+    tone: "teal" as CalendarEvent["tone"],
   });
   const [selectedNoteId, setSelectedNoteId] = useState<string>(notes[0]?.id ?? "");
   const [selectedDraftId, setSelectedDraftId] = useState<string>(drafts[0]?.id ?? "");
@@ -141,6 +145,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const pendingCallCount = calls.filter((call) => call.status === "pending").length;
   const notesPreview = notes.find((note) => note.id === selectedNoteId) ?? notes[0];
   const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) ?? drafts[0];
+  const sortedCalendarEvents = useMemo(
+    () => [...calendarEvents].sort((left, right) => left.start.localeCompare(right.start)),
+    [calendarEvents],
+  );
 
   const filteredTaskGroups = useMemo(
     () => ({
@@ -362,9 +370,35 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     });
   }
 
+  function handleAddCalendarEvent() {
+    if (!canCreateCalendarEvent) {
+      return;
+    }
+
+    addCalendarEvent({
+      title: calendarForm.title.trim(),
+      detail: calendarForm.detail.trim() || "Planned event",
+      start: calendarForm.start.trim(),
+      end: calendarForm.end.trim(),
+      location: calendarForm.location.trim() || undefined,
+      tone: calendarForm.tone,
+    });
+
+    setCalendarForm({
+      title: "",
+      detail: "",
+      start: "",
+      end: "",
+      location: "",
+      tone: "teal",
+    });
+  }
+
   const canCreateTask = taskForm.title.trim().length > 0 && taskForm.due.trim().length > 0;
   const canCreateNote = noteForm.title.trim().length > 0 && noteForm.content.trim().length > 0;
   const canCreateReminder = reminderForm.title.trim().length > 0 && reminderForm.when.trim().length > 0;
+  const canCreateCalendarEvent =
+    calendarForm.title.trim().length > 0 && calendarForm.start.trim().length > 0 && calendarForm.end.trim().length > 0;
 
   const quickActions = [
     {
@@ -533,19 +567,19 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       </div>
 
                       <div className="space-y-6">
-                        {scheduleItems.map((item, index) => (
-                          <div key={`${item.time}-${item.title}`} className="flex gap-4">
+                        {sortedCalendarEvents.map((item, index) => (
+                          <div key={`${item.start}-${item.title}`} className="flex gap-4">
                             <div className="flex flex-col items-center">
                               <span className="h-3 w-3 rounded-full border border-white/90 bg-transparent" />
-                              {index < scheduleItems.length - 1 ? <span className="mt-2 h-full w-px bg-white/10" /> : null}
+                              {index < sortedCalendarEvents.length - 1 ? <span className="mt-2 h-full w-px bg-white/10" /> : null}
                             </div>
-                            <div className="copy-strong min-w-[78px] text-sm">{item.time}</div>
+                            <div className="copy-strong min-w-[78px] text-sm">{item.start}</div>
                             <div className="flex-1">
                               <div className="flex items-center gap-3">
                                 <span
                                   className={clsx(
                                     "h-2.5 w-2.5 rounded-full",
-                                    item.tone === "teal" ? "bg-[#56d3d0]" : "bg-[#ddb26f]",
+                                    item.tone === "teal" ? "bg-[#56d3d0]" : item.tone === "gold" ? "bg-[#ddb26f]" : "bg-[#f2808e]",
                                   )}
                                 />
                                 <p className="title-main text-xl">{item.title}</p>
@@ -1110,23 +1144,58 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               ) : null}
 
               {section === "calendar" ? (
-                <SectionPage eyebrow="Calendar" title="Mock schedule now, real sync later." description="The MVP keeps calendar data local first so approvals stay reliable before external integrations are added.">
+                <SectionPage eyebrow="Calendar" title="Plan the day with real events." description="The MVP now keeps calendar events in the server-backed workspace so your schedule behaves like the rest of JARVIS.">
                   <div className="mb-4 grid gap-4 md:grid-cols-3">
-                    <MetricCard label="Meetings" value="2" detail="Classes and check-ins" />
-                    <MetricCard label="Focus gap" value="1h" detail="Open before 3 PM" />
-                    <MetricCard label="Evening plan" value="Gym" detail="Ready to confirm" />
+                    <MetricCard label="Events" value={String(calendarEvents.length)} detail="Live schedule items" />
+                    <MetricCard label="Pending calls" value={String(pendingCallCount)} detail="May affect your plan" />
+                    <MetricCard label="Open approvals" value={String(pendingCount)} detail="Calendar stays transparent" />
                   </div>
-                  <DashboardPanel title="Today's Schedule">
-                    <div className="space-y-4">
-                      {scheduleItems.map((item) => (
-                        <div key={`${item.time}-${item.title}`} className="app-card p-4">
-                          <p className="accent-copy text-sm uppercase tracking-[0.18em]">{item.time}</p>
-                          <p className="title-main mt-2 text-xl">{item.title}</p>
-                          <p className="mt-1 text-sm text-muted">{item.detail}</p>
+                  <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+                    <DashboardPanel title="Event Builder">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <input value={calendarForm.title} onChange={(e) => setCalendarForm((current) => ({ ...current, title: e.target.value }))} placeholder="Event title" className="field-input md:col-span-2" />
+                        <input value={calendarForm.start} onChange={(e) => setCalendarForm((current) => ({ ...current, start: e.target.value }))} placeholder="Start, like 2:00 PM" className="field-input" />
+                        <input value={calendarForm.end} onChange={(e) => setCalendarForm((current) => ({ ...current, end: e.target.value }))} placeholder="End, like 3:00 PM" className="field-input" />
+                        <input value={calendarForm.location} onChange={(e) => setCalendarForm((current) => ({ ...current, location: e.target.value }))} placeholder="Location" className="field-input" />
+                        <select value={calendarForm.tone} onChange={(e) => setCalendarForm((current) => ({ ...current, tone: e.target.value as CalendarEvent["tone"] }))} className="field-input">
+                          <option value="teal">Teal</option>
+                          <option value="gold">Gold</option>
+                          <option value="rose">Rose</option>
+                        </select>
+                        <textarea value={calendarForm.detail} onChange={(e) => setCalendarForm((current) => ({ ...current, detail: e.target.value }))} placeholder="Event detail or agenda" className="field-input min-h-28 md:col-span-2" />
+                      </div>
+                      <div className="mt-4">
+                        <button type="button" className="jarvis-button" onClick={handleAddCalendarEvent} disabled={!canCreateCalendarEvent}>
+                          Create Event
+                        </button>
+                      </div>
+                    </DashboardPanel>
+                    <DashboardPanel title="Today's Schedule">
+                      {sortedCalendarEvents.length > 0 ? (
+                        <div className="space-y-4">
+                          {sortedCalendarEvents.map((item) => (
+                            <div key={`${item.start}-${item.title}`} className="app-card p-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div>
+                                  <p className="accent-copy text-sm uppercase tracking-[0.18em]">
+                                    {item.start} - {item.end}
+                                  </p>
+                                  <p className="title-main mt-2 text-xl">{item.title}</p>
+                                  <p className="mt-1 text-sm text-muted">{item.detail}</p>
+                                  {item.location ? <p className="copy-soft mt-2 text-sm">{item.location}</p> : null}
+                                </div>
+                                <button type="button" className="small-action" onClick={() => deleteCalendarEvent(item.id)}>
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </DashboardPanel>
+                      ) : (
+                        <EmptyState title="No calendar events yet" description="Add your first event here and JARVIS will reflect it in the dashboard schedule." />
+                      )}
+                    </DashboardPanel>
+                  </div>
                 </SectionPage>
               ) : null}
 

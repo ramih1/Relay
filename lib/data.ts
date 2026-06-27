@@ -1,4 +1,4 @@
-import { CallRequest, EmailDraft, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
+import { CalendarEvent, CallRequest, EmailDraft, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
 
 export const initialTasks: Task[] = [
   {
@@ -41,6 +41,45 @@ export const initialReminders: Reminder[] = [
     repeat: "weekly",
     priority: "low",
     status: "active",
+  },
+];
+
+export const initialCalendarEvents: CalendarEvent[] = [
+  {
+    id: "event-1",
+    title: "Data Structures Lecture",
+    detail: "CS Building, Room 301",
+    start: "9:00 AM",
+    end: "10:15 AM",
+    location: "CS Building, Room 301",
+    tone: "teal",
+  },
+  {
+    id: "event-2",
+    title: "Study Group",
+    detail: "Library, Room 2B",
+    start: "11:00 AM",
+    end: "12:00 PM",
+    location: "Library, Room 2B",
+    tone: "teal",
+  },
+  {
+    id: "event-3",
+    title: "Project Meeting",
+    detail: "Online • Google Meet",
+    start: "3:00 PM",
+    end: "3:45 PM",
+    location: "Google Meet",
+    tone: "gold",
+  },
+  {
+    id: "event-4",
+    title: "Gym",
+    detail: "Fitness Session",
+    start: "6:30 PM",
+    end: "8:00 PM",
+    location: "Campus Gym",
+    tone: "teal",
   },
 ];
 

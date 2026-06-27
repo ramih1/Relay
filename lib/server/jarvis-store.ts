@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  initialCalendarEvents,
   initialCalls,
   initialEmailDrafts,
   initialNotes,
@@ -28,6 +29,7 @@ function createInitialState(): JarvisStateSnapshot {
     tasks: structuredClone(initialTasks),
     notes: structuredClone(initialNotes),
     reminders: structuredClone(initialReminders),
+    calendarEvents: structuredClone(initialCalendarEvents),
     drafts: structuredClone(initialEmailDrafts),
     calls: structuredClone(initialCalls),
     pendingActions: structuredClone(initialPendingActions),
@@ -560,6 +562,41 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
         category: "productivity",
         impact: "success",
       });
+      break;
+    case "add_calendar_event":
+      state.calendarEvents = [
+        {
+          id: crypto.randomUUID(),
+          title: input.input.title,
+          detail: input.input.detail,
+          start: input.input.start,
+          end: input.input.end,
+          location: input.input.location,
+          tone: input.input.tone,
+        },
+        ...state.calendarEvents,
+      ];
+      appendFeed(state, `Added a calendar event: ${input.input.title}.`);
+      recordEvent(state, {
+        title: "Calendar event created",
+        detail: input.input.title,
+        category: "productivity",
+        impact: "success",
+      });
+      break;
+    case "delete_calendar_event":
+      {
+        const event = state.calendarEvents.find((item) => item.id === input.eventId);
+        state.calendarEvents = state.calendarEvents.filter((event) => event.id !== input.eventId);
+        if (event) {
+          recordEvent(state, {
+            title: "Calendar event deleted",
+            detail: event.title,
+            category: "productivity",
+            impact: "warning",
+          });
+        }
+      }
       break;
     case "update_reminder":
       {

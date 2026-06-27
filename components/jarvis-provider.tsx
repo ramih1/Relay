@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  initialCalendarEvents,
   initialCalls,
   initialEmailDrafts,
   initialNotes,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/data";
 import type {
   ActionLogEntry,
+  CalendarEvent,
   EmailDraft,
   JarvisMutationRequest,
   JarvisStateSnapshot,
@@ -39,10 +41,20 @@ type NewReminderInput = {
   priority: Reminder["priority"];
 };
 
+type NewCalendarEventInput = {
+  title: string;
+  detail: string;
+  start: string;
+  end: string;
+  location?: string;
+  tone: CalendarEvent["tone"];
+};
+
 type JarvisStore = {
   tasks: Task[];
   notes: Note[];
   reminders: Reminder[];
+  calendarEvents: CalendarEvent[];
   drafts: EmailDraft[];
   calls: JarvisStateSnapshot["calls"];
   pendingActions: PendingAction[];
@@ -59,6 +71,8 @@ type JarvisStore = {
   updateNote: (noteId: string, updates: Partial<Note>) => Promise<void>;
   deleteNote: (noteId: string) => Promise<void>;
   addReminder: (input: NewReminderInput) => Promise<void>;
+  addCalendarEvent: (input: NewCalendarEventInput) => Promise<void>;
+  deleteCalendarEvent: (eventId: string) => Promise<void>;
   updateReminder: (reminderId: string, updates: Partial<Reminder>) => Promise<void>;
   deleteReminder: (reminderId: string) => Promise<void>;
   saveDraft: (draftId: string, updates: Partial<EmailDraft>) => Promise<void>;
@@ -73,6 +87,7 @@ const fallbackState: JarvisStateSnapshot = {
   tasks: initialTasks,
   notes: initialNotes,
   reminders: initialReminders,
+  calendarEvents: initialCalendarEvents,
   drafts: initialEmailDrafts,
   calls: initialCalls,
   pendingActions: initialPendingActions,
@@ -150,6 +165,8 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       },
       deleteNote: async (noteId) => mutate({ type: "delete_note", noteId }),
       addReminder: async (input) => mutate({ type: "add_reminder", input }),
+      addCalendarEvent: async (input) => mutate({ type: "add_calendar_event", input }),
+      deleteCalendarEvent: async (eventId) => mutate({ type: "delete_calendar_event", eventId }),
       updateReminder: async (reminderId, updates) => mutate({ type: "update_reminder", reminderId, updates }),
       deleteReminder: async (reminderId) => mutate({ type: "delete_reminder", reminderId }),
       saveDraft: async (draftId, updates) => mutate({ type: "save_draft", draftId, updates }),
