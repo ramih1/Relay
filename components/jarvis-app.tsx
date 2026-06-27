@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { initialNotifications } from "@/lib/data";
-import type { EmailDraft, NavKey, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
+import type { DashboardInsightSnapshot, EmailDraft, NavKey, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
 import { useJarvis } from "@/components/jarvis-provider";
 
 const navItems: { key: NavKey; label: string; href: string; icon: ComponentType<{ className?: string }> }[] = [
@@ -56,12 +56,6 @@ const scheduleItems = [
   { time: "3:00 PM", title: "Project Meeting", detail: "Online • Google Meet", tone: "gold" },
   { time: "6:30 PM", title: "Gym", detail: "Fitness Session", tone: "teal" },
 ] as const;
-
-const suggestions = [
-  "You have a gap at 1:00 PM. Good time to study.",
-  "Consider starting your project earlier.",
-  "3 tasks can be scheduled around your classes.",
-];
 
 const mobileNavItems = navItems.slice(0, 5);
 
@@ -136,6 +130,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const [noteTagFilter, setNoteTagFilter] = useState("all");
   const [reminderFilter, setReminderFilter] = useState<ReminderFilter>("all");
   const [reminderQuery, setReminderQuery] = useState("");
+  const [insights, setInsights] = useState<DashboardInsightSnapshot | null>(null);
 
   const pendingApprovals = pendingActions.filter((item) => item.status === "pending");
   const pendingCount = pendingApprovals.length;
@@ -213,7 +208,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     [calls, drafts, pendingActions, reminders],
   );
 
-  const todayBrief = useMemo(() => {
+  const fallbackBrief = useMemo(() => {
     const lines: string[] = [];
 
     if (overdueCount > 0) {
@@ -302,7 +297,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     );
   }, [reminderFilter, reminderGroups, reminderQuery]);
 
-  const briefFocus = useMemo(() => {
+  const fallbackFocus = useMemo(() => {
     if (overdueCount > 0) {
       return "Start by clearing the overdue work so the rest of the day feels lighter.";
     }
@@ -410,6 +405,31 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadInsights() {
+      try {
+        const response = await fetch("/api/insights", { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+        const next = (await response.json()) as DashboardInsightSnapshot;
+        if (!cancelled) {
+          setInsights(next);
+        }
+      } catch {
+        // Keep fallback content if the backend insights route is unavailable.
+      }
+    }
+
+    void loadInsights();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assistantFeed.length, pendingActions.length, reminders.length, tasks.length, drafts.length, calls.length]);
+
   return (
     <main className="min-h-screen bg-bg pb-24 text-text lg:pb-0">
       <div className="relative overflow-hidden">
@@ -477,7 +497,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           <h1 className="title-hero mt-5 font-display text-[3rem] leading-[1.02] sm:text-[4rem]">
                             Good morning, Rami.
                           </h1>
-                          <p className="copy-strong mt-4 max-w-[620px] text-xl leading-9">{todayBrief}</p>
+                          <p className="copy-strong mt-4 max-w-[620px] text-xl leading-9">{insights?.dailyBrief ?? fallbackBrief}</p>
                         </div>
                         <button type="button" className="soft-outline hidden lg:inline-flex">
                           Generate again
@@ -500,7 +520,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       </div>
                       <div className="focus-block mt-5 px-4 py-4">
                         <p className="accent-copy text-sm uppercase tracking-[0.2em]">Focus suggestion</p>
-                        <p className="copy-strong mt-2 text-sm leading-7">{briefFocus}</p>
+                        <p className="copy-strong mt-2 text-sm leading-7">{insights?.focusMessage ?? fallbackFocus}</p>
                       </div>
                     </section>
 
@@ -563,7 +583,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                     <DashboardPanel title="Notifications Intelligence" actionLabel="View all" href="/notifications">
                       <div className="space-y-4">
                         {initialNotifications.map((notification) => (
-                          <NotificationRow key={notification.id} notification={notification} />
+                          <NotificationRow key={notification.id} notification={(insights?.rankedNotifications ?? initialNotifications).find((item) => item.id === notification.id) ?? notification} />
                         ))}
                       </div>
                     </DashboardPanel>
@@ -612,7 +632,11 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
                     <DashboardPanel title="AI Suggestions" actionLabel="Open assistant" href="/assistant">
                       <div className="space-y-3">
-                        {suggestions.map((suggestion) => (
+                        {(insights?.suggestionCards ?? [
+                          "You have a gap at 1:00 PM. Good time to study.",
+                          "Consider starting your project earlier.",
+                          "3 tasks can be scheduled around your classes.",
+                        ]).map((suggestion) => (
                           <button
                             key={suggestion}
                             type="button"
@@ -1154,14 +1178,21 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               {section === "notifications" ? (
                 <SectionPage eyebrow="Notifications" title="See what matters now." description="JARVIS groups mock notifications by urgency so the dashboard stays calm instead of noisy.">
                   <div className="mb-4 grid gap-4 md:grid-cols-4">
-                    <MetricCard label="Urgent" value={String(initialNotifications.filter((n) => n.category === "urgent").length)} detail="Needs attention now" />
-                    <MetricCard label="Important" value={String(initialNotifications.filter((n) => n.category === "important").length)} detail="Worth looking at soon" />
-                    <MetricCard label="Later" value={String(initialNotifications.filter((n) => n.category === "later").length)} detail="Can wait" />
-                    <MetricCard label="Low" value={String(initialNotifications.filter((n) => n.category === "low").length)} detail="Background noise" />
+                    <MetricCard label="Urgent" value={String((insights?.rankedNotifications ?? initialNotifications).filter((n) => n.category === "urgent").length)} detail="Needs attention now" />
+                    <MetricCard label="Important" value={String((insights?.rankedNotifications ?? initialNotifications).filter((n) => n.category === "important").length)} detail="Worth looking at soon" />
+                    <MetricCard label="Later" value={String((insights?.rankedNotifications ?? initialNotifications).filter((n) => n.category === "later").length)} detail="Can wait" />
+                    <MetricCard label="Low" value={String((insights?.rankedNotifications ?? initialNotifications).filter((n) => n.category === "low").length)} detail="Background noise" />
+                  </div>
+                  <div className="mb-4">
+                    <DashboardPanel title="What Matters Now">
+                      <p className="copy-strong text-sm leading-7">
+                        {insights?.notificationSummary ?? "No urgent alerts right now. Important updates can be handled next."}
+                      </p>
+                    </DashboardPanel>
                   </div>
                   <DashboardPanel title="Notification Ranking">
                     <div className="space-y-5">
-                      {initialNotifications.map((notification) => (
+                      {(insights?.rankedNotifications ?? initialNotifications).map((notification) => (
                         <NotificationRow key={notification.id} notification={notification} />
                       ))}
                     </div>

@@ -107,6 +107,14 @@ export type JarvisStateSnapshot = {
   actionLog: ActionLogEntry[];
 };
 
+export type DashboardInsightSnapshot = {
+  dailyBrief: string;
+  focusMessage: string;
+  suggestionCards: string[];
+  notificationSummary: string;
+  rankedNotifications: NotificationItem[];
+};
+
 export type JarvisMutationRequest =
   | { type: "reset_state" }
   | { type: "submit_command"; input: string }
