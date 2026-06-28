@@ -1,0 +1,349 @@
+import type {
+  ActionLogEntry,
+  AssistantRequestEntry,
+  CallRequest,
+  EmailDraft,
+  PendingAction,
+  Reminder,
+  Task,
+  UserPreferences,
+} from "@/lib/types";
+
+type AssistantCommandPlan = {
+  feedMessage: string;
+  request: Omit<AssistantRequestEntry, "id" | "happenedAt">;
+  event: Omit<ActionLogEntry, "id" | "happenedAt">;
+  pendingActions?: PendingAction[];
+  drafts?: EmailDraft[];
+  calls?: CallRequest[];
+};
+
+const defaultPreferences: UserPreferences = {
+  theme: "carbon",
+  assistantTone: "calm",
+  digestStyle: "balanced",
+  approvalsLocked: true,
+};
+
+function cleanText(input: string) {
+  return input.replace(/\s+/g, " ").trim();
+}
+
+function titleCase(input: string) {
+  return input
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function sentenceCase(input: string) {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+function withTone(message: string, tone: UserPreferences["assistantTone"]) {
+  if (tone === "friendly") {
+    return `${message} I kept it ready for you to review when you want.`;
+  }
+
+  if (tone === "formal") {
+    return `${message} It is prepared for your review and approval.`;
+  }
+
+  return message;
+}
+
+function extractTimePhrase(input: string) {
+  const match = input.match(
+    /\b(today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+[\d:apm\s]+)?/i,
+  );
+
+  if (match) {
+    return sentenceCase(match[0].replace(/\s+/g, " "));
+  }
+
+  const atMatch = input.match(/\bat\s+([\d:]+(?:\s?[ap]m)?)/i);
+  if (atMatch) {
+    return `Today at ${atMatch[1].replace(/\s+/g, " ").trim()}`;
+  }
+
+  return "Tomorrow at 9:00 AM";
+}
+
+function inferPriority(input: string): Task["priority"] | Reminder["priority"] {
+  if (/(exam|assignment|project|deadline|urgent|professor|interview)/i.test(input)) {
+    return "high";
+  }
+
+  if (/(meeting|email|team|gym|class|call)/i.test(input)) {
+    return "medium";
+  }
+
+  return "low";
+}
+
+function buildReminderPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+  const normalized = input.replace(/^remind me to\s+/i, "").replace(/^set a reminder to\s+/i, "");
+  const timePhrase = extractTimePhrase(input);
+  const title = sentenceCase(
+    normalized
+      .replace(/\b(today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b.*$/i, "")
+      .replace(/\bat\s+[\d:apm\s]+$/i, "")
+      .trim() || "Follow up",
+  );
+  const priority = inferPriority(input);
+
+  const action: PendingAction = {
+    id: crypto.randomUUID(),
+    type: "create_reminder",
+    title: "Create Reminder",
+    description: `${title} • ${timePhrase}`,
+    risk: "medium",
+    status: "pending",
+    payload: {
+      title,
+      when: timePhrase,
+      repeat: "none",
+      priority,
+    },
+  };
+
+  return {
+    feedMessage: withTone(`Prepared a reminder proposal for "${title}". It is waiting in Confirmations.`, preferences.assistantTone),
+    request: {
+      input,
+      outcome: `Created a reminder proposal for ${timePhrase}.`,
+      status: "proposal_created",
+    },
+    event: {
+      title: "Reminder proposal created",
+      detail: `${title} • ${timePhrase}`,
+      category: "assistant",
+      impact: "info",
+    },
+    pendingActions: [action],
+  };
+}
+
+function extractRecipient(input: string) {
+  const match = input.match(/\bto\s+(.+?)(?:\s+about|\s+asking|\s+for|\s*$)/i);
+  if (!match) {
+    return "Recipient to be confirmed";
+  }
+
+  return titleCase(match[1].replace(/\bmy\b/gi, "").trim()) || "Recipient to be confirmed";
+}
+
+function buildExtensionEmail(recipient: string) {
+  return {
+    subject: "Request for a Short Extension",
+    body:
+      `Hi ${recipient === "Recipient to be confirmed" ? "" : recipient},\n\n` +
+      "I hope you're doing well. I wanted to ask whether a short extension would be possible for my assignment. " +
+      "I've been making steady progress and would appreciate a little more time to submit my best work.\n\n" +
+      "Thank you for considering it.\n\nBest,\nRami",
+  };
+}
+
+function buildEmailPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+  const recipient = extractRecipient(input);
+  const isExtension = /extension|extend/i.test(input);
+  const draftId = crypto.randomUUID();
+  const email = isExtension
+    ? buildExtensionEmail(recipient)
+    : {
+        subject: "Follow-up",
+        body:
+          `Hi ${recipient === "Recipient to be confirmed" ? "" : recipient},\n\n` +
+          "I wanted to follow up and share a quick note. Let me know if this works for you.\n\nBest,\nRami",
+      };
+
+  const draft: EmailDraft = {
+    id: draftId,
+    recipient,
+    subject: email.subject,
+    body: email.body,
+    tone: /formal/i.test(input) ? "formal" : /friendly/i.test(input) ? "friendly" : "professional",
+    status: "draft",
+  };
+
+  const action: PendingAction = {
+    id: crypto.randomUUID(),
+    type: "draft_email",
+    title: recipient === "Recipient to be confirmed" ? "Email Draft" : `Email Draft to ${recipient}`,
+    description: email.subject,
+    risk: "medium",
+    status: "pending",
+    payload: { draftId },
+  };
+
+  return {
+    feedMessage: withTone("Drafted an email and queued it for approval before saving.", preferences.assistantTone),
+    request: {
+      input,
+      outcome: "Created an email draft proposal for review.",
+      status: "proposal_created",
+    },
+    event: {
+      title: "Email draft prepared",
+      detail: email.subject,
+      category: "assistant",
+      impact: "info",
+    },
+    drafts: [draft],
+    pendingActions: [action],
+  };
+}
+
+function inferCallContact(input: string) {
+  const match = input.match(/\bcall\s+(?:the\s+|my\s+)?(.+?)(?:\s+and\s+ask|\s+about|\s*$)/i);
+  return titleCase(match?.[1]?.trim() || "Campus Gym");
+}
+
+function buildCallPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+  const contactName = inferCallContact(input);
+  const purposeMatch = input.match(/\bask\s+if\s+(.+)$/i);
+  const purpose = purposeMatch
+    ? `Ask if ${purposeMatch[1].trim().replace(/\?+$/, "")}`
+    : "Ask for availability and any restrictions";
+  const callId = crypto.randomUUID();
+
+  const call: CallRequest = {
+    id: callId,
+    contactName,
+    phoneNumber: "(555) 210-1184",
+    purpose,
+    script: `Hi, I'm JARVIS, an AI assistant calling on behalf of Rami. I'm calling ${contactName} to ${purpose.toLowerCase()}.`,
+    allowedActions: ["Ask clarifying questions", "Confirm availability", "Ask operating hours"],
+    restrictedActions: ["Do not book anything", "Do not share private details"],
+    status: "pending",
+  };
+
+  const action: PendingAction = {
+    id: crypto.randomUUID(),
+    type: "place_call",
+    title: `Call ${contactName}`,
+    description: purpose,
+    risk: "high",
+    status: "pending",
+    payload: { callId },
+  };
+
+  return {
+    feedMessage: withTone(
+      "Created a transparent call plan with allowed and restricted actions. It is waiting for approval.",
+      preferences.assistantTone,
+    ),
+    request: {
+      input,
+      outcome: "Prepared a call plan with approval requirements.",
+      status: "proposal_created",
+    },
+    event: {
+      title: "Call plan prepared",
+      detail: `${contactName} • ${purpose}`,
+      category: "call",
+      impact: "warning",
+    },
+    calls: [call],
+    pendingActions: [action],
+  };
+}
+
+function buildTaskExtractionPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+  const tasks = [
+    "Confirm timeline with professor",
+    "Clean dataset labels",
+    "Send the team the experiment checklist",
+  ];
+
+  const action: PendingAction = {
+    id: crypto.randomUUID(),
+    type: "create_tasks_from_note",
+    title: "Create Tasks from Note",
+    description: `${tasks.length} action items identified`,
+    risk: "low",
+    status: "pending",
+    payload: { tasks },
+  };
+
+  return {
+    feedMessage: withTone(
+      "Extracted action items from your note and sent them to Confirmations for review.",
+      preferences.assistantTone,
+    ),
+    request: {
+      input,
+      outcome: "Extracted note tasks and queued them for approval.",
+      status: "proposal_created",
+    },
+    event: {
+      title: "Tasks extracted from note",
+      detail: `${tasks.length} task suggestions prepared`,
+      category: "assistant",
+      impact: "info",
+    },
+    pendingActions: [action],
+  };
+}
+
+function buildClarificationPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+
+  return {
+    feedMessage: withTone(
+      "I understood the request at a high level and would ask one focused follow-up before creating an action proposal in the real agent flow.",
+      preferences.assistantTone,
+    ),
+    request: {
+      input,
+      outcome: "Needs one clarifying follow-up before creating a safe proposal.",
+      status: "needs_clarification",
+    },
+    event: {
+      title: "Assistant requested clarification",
+      detail: input,
+      category: "assistant",
+      impact: "info",
+    },
+  };
+}
+
+export function buildAssistantCommandPlan(
+  rawInput: string,
+  preferences: UserPreferences = defaultPreferences,
+): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+  const lower = input.toLowerCase();
+
+  if (!input) {
+    return buildClarificationPlan("Empty command", preferences);
+  }
+
+  if (/(remind me|set a reminder)/i.test(lower)) {
+    return buildReminderPlan(input, preferences);
+  }
+
+  if (/(draft|write).*\bemail\b/i.test(lower)) {
+    return buildEmailPlan(input, preferences);
+  }
+
+  if (/\bcall\b/i.test(lower)) {
+    return buildCallPlan(input, preferences);
+  }
+
+  if (/(turn this note into tasks|extract tasks|action items|tasks from note)/i.test(lower)) {
+    return buildTaskExtractionPlan(input, preferences);
+  }
+
+  return buildClarificationPlan(input, preferences);
+}

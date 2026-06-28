@@ -26,7 +26,18 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { CalendarEvent, DashboardInsightSnapshot, EmailDraft, NavKey, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
+import type {
+  CalendarEvent,
+  DashboardInsightSnapshot,
+  EmailDraft,
+  NavKey,
+  Note,
+  NotificationItem,
+  PendingAction,
+  Reminder,
+  Task,
+  ThemeName,
+} from "@/lib/types";
 import { useJarvis } from "@/components/jarvis-provider";
 
 const navItems: { key: NavKey; label: string; href: string; icon: ComponentType<{ className?: string }> }[] = [
@@ -58,9 +69,7 @@ const themeOptions = [
   { key: "light", label: "Light", accent: "#0f766e" },
   { key: "dawn", label: "Dawn", accent: "#b45309" },
   { key: "ocean", label: "Ocean", accent: "#38bdf8" },
-] as const;
-type ThemeName = (typeof themeOptions)[number]["key"];
-const THEME_STORAGE_KEY = "jarvis-theme-v1";
+] as const satisfies ReadonlyArray<{ key: ThemeName; label: string; accent: string }>;
 const activityToneMap = {
   pending: "warning",
   approved: "success",
@@ -72,6 +81,8 @@ const taskFilterOptions = ["all", "today", "upcoming", "overdue", "completed"] a
 type TaskFilter = (typeof taskFilterOptions)[number];
 const reminderFilterOptions = ["all", "active", "snoozed", "done"] as const;
 type ReminderFilter = (typeof reminderFilterOptions)[number];
+const assistantToneOptions = ["calm", "friendly", "formal"] as const;
+const digestStyleOptions = ["balanced", "brief"] as const;
 
 export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const {
@@ -86,6 +97,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     assistantFeed,
     assistantRequests,
     actionLog,
+    preferences,
     submitCommand,
     approveAction,
     cancelAction,
@@ -107,6 +119,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     summarizeNote,
     suggestNoteTags,
     createCallFollowups,
+    updatePreferences,
     resetState,
   } = useJarvis();
 
@@ -431,16 +444,17 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   ];
 
   useEffect(() => {
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY) as ThemeName | null;
-    if (storedTheme && themeOptions.some((option) => option.key === storedTheme)) {
-      setTheme(storedTheme);
-    }
-  }, []);
+    setTheme(preferences.theme);
+  }, [preferences.theme]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  function handleThemeChange(nextTheme: ThemeName) {
+    setTheme(nextTheme);
+    void updatePreferences({ theme: nextTheme });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -521,7 +535,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
             </aside>
 
             <section className="relative flex flex-1 flex-col px-5 py-5 lg:px-6">
-              <ThemeRail theme={theme} setTheme={setTheme} />
+              <ThemeRail theme={theme} onThemeChange={handleThemeChange} />
               <TopCommandBar command={command} setCommand={setCommand} submitCommand={handleSubmitCommand} />
 
               {section === "dashboard" ? (
@@ -1279,14 +1293,44 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               ) : null}
 
               {section === "settings" ? (
-                <SectionPage eyebrow="Settings" title="Preferences and future integrations." description="This area is ready for auth preferences, integration toggles, and consent controls once the backend layer is added.">
+                <SectionPage eyebrow="Settings" title="Preferences and future integrations." description="This area is moving from demo controls toward real persisted user preferences and integration consent.">
                   <div className="grid gap-4 md:grid-cols-2">
                     <DashboardPanel title="Assistant Preferences">
-                      <ul className="copy-strong space-y-3 text-sm leading-7">
-                        <li>• Default tone: calm and professional</li>
-                        <li>• Important actions require explicit approval</li>
-                        <li>• Simulated calls identify JARVIS clearly</li>
-                      </ul>
+                      <div className="space-y-5">
+                        <div>
+                          <p className="copy-soft text-xs uppercase tracking-[0.18em]">Assistant tone</p>
+                          <div className="mt-3 flex flex-wrap gap-3">
+                            {assistantToneOptions.map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                onClick={() => void updatePreferences({ assistantTone: option })}
+                                className={clsx("theme-pill", preferences.assistantTone === option && "active")}
+                              >
+                                {option}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="copy-soft text-xs uppercase tracking-[0.18em]">Daily brief style</p>
+                          <div className="mt-3 flex flex-wrap gap-3">
+                            {digestStyleOptions.map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                onClick={() => void updatePreferences({ digestStyle: option })}
+                                className={clsx("theme-pill", preferences.digestStyle === option && "active")}
+                              >
+                                {option}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="copy-strong text-sm leading-7">
+                          Important actions still require explicit approval, and simulated calls continue to identify JARVIS clearly on your behalf.
+                        </p>
+                      </div>
                     </DashboardPanel>
                     <DashboardPanel title="Coming Integrations">
                       <ul className="copy-strong space-y-3 text-sm leading-7">
@@ -1300,7 +1344,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                     <DashboardPanel title="Backend State">
                       <div className="space-y-4">
                         <p className="copy-strong text-sm leading-7">
-                          JARVIS now keeps its workspace state through the server layer instead of relying only on browser-local memory. That means tasks, reminders, drafts, calls, and approvals persist in the project runtime itself.
+                          JARVIS now keeps its workspace state through the server layer instead of relying only on browser-local memory. Tasks, reminders, drafts, calls, approvals, and appearance preferences persist in the project runtime itself.
                         </p>
                         <div className="grid gap-3 md:grid-cols-3">
                           <TaskInsightCard label="Tasks" value={String(tasks.length)} detail="Server-backed records" />
@@ -1327,7 +1371,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           <button
                             key={option.key}
                             type="button"
-                            onClick={() => setTheme(option.key)}
+                            onClick={() => handleThemeChange(option.key)}
                             className={clsx(
                               "theme-card",
                               theme === option.key && "active",
@@ -1360,6 +1404,13 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           </button>
                         ))}
                       </div>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <span className="soft-outline text-sm">Assistant tone: {preferences.assistantTone}</span>
+                        <span className="soft-outline text-sm">Daily brief: {preferences.digestStyle}</span>
+                        <span className="soft-outline text-sm">
+                          Approval lock: {preferences.approvalsLocked ? "enabled" : "disabled"}
+                        </span>
+                      </div>
                     </DashboardPanel>
                   </div>
                 </SectionPage>
@@ -1375,10 +1426,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
 function ThemeRail({
   theme,
-  setTheme,
+  onThemeChange,
 }: {
   theme: ThemeName;
-  setTheme: (theme: ThemeName) => void;
+  onThemeChange: (theme: ThemeName) => void;
 }) {
   return (
     <div className="theme-rail hidden lg:flex" aria-label="Theme controls">
@@ -1393,7 +1444,7 @@ function ThemeRail({
             <button
               key={option.key}
               type="button"
-              onClick={() => setTheme(option.key)}
+              onClick={() => onThemeChange(option.key)}
               className={clsx("theme-pill", theme === option.key && "active")}
             >
               <span className="theme-swatch" style={{ backgroundColor: option.accent }} />

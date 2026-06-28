@@ -23,6 +23,7 @@ import type {
   PendingAction,
   Reminder,
   Task,
+  UserPreferences,
 } from "@/lib/types";
 
 type NewTaskInput = {
@@ -65,6 +66,7 @@ type JarvisStore = {
   assistantFeed: string[];
   assistantRequests: AssistantRequestEntry[];
   actionLog: ActionLogEntry[];
+  preferences: UserPreferences;
   submitCommand: (input: string) => Promise<void>;
   approveAction: (actionId: string) => Promise<void>;
   cancelAction: (actionId: string) => Promise<void>;
@@ -87,6 +89,7 @@ type JarvisStore = {
   summarizeNote: (noteId: string) => Promise<void>;
   suggestNoteTags: (noteId: string) => Promise<void>;
   createCallFollowups: (callId: string) => Promise<void>;
+  updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>;
   resetState: () => Promise<void>;
 };
 
@@ -104,6 +107,12 @@ const fallbackState: JarvisStateSnapshot = {
   ],
   assistantRequests: [],
   actionLog: [],
+  preferences: {
+    theme: "carbon",
+    assistantTone: "calm",
+    digestStyle: "balanced",
+    approvalsLocked: true,
+  },
 };
 
 const JarvisContext = createContext<JarvisStore | null>(null);
@@ -151,10 +160,25 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     setState(snapshot);
   }
 
+  async function submitAssistant(input: string) {
+    const response = await fetch("/api/assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to process assistant command.");
+    }
+
+    const snapshot = (await response.json()) as JarvisStateSnapshot;
+    setState(snapshot);
+  }
+
   const value = useMemo<JarvisStore>(
     () => ({
       ...state,
-      submitCommand: async (input) => mutate({ type: "submit_command", input }),
+      submitCommand: submitAssistant,
       approveAction: async (actionId) => mutate({ type: "approve_action", actionId }),
       cancelAction: async (actionId) => mutate({ type: "cancel_action", actionId }),
       updatePendingAction: async (actionId, updates) =>
@@ -186,6 +210,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       summarizeNote: async (noteId) => mutate({ type: "summarize_note", noteId }),
       suggestNoteTags: async (noteId) => mutate({ type: "suggest_note_tags", noteId }),
       createCallFollowups: async (callId) => mutate({ type: "create_call_followups", callId }),
+      updatePreferences: async (updates) => mutate({ type: "update_preferences", updates }),
       resetState: async () => mutate({ type: "reset_state" }),
     }),
     [state],

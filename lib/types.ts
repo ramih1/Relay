@@ -12,6 +12,14 @@ export type NavKey =
 
 export type Priority = "low" | "medium" | "high";
 export type RiskLevel = "low" | "medium" | "high";
+export type ThemeName = "carbon" | "light" | "dawn" | "ocean";
+
+export type UserPreferences = {
+  theme: ThemeName;
+  assistantTone: "calm" | "friendly" | "formal";
+  digestStyle: "balanced" | "brief";
+  approvalsLocked: boolean;
+};
 
 export type Task = {
   id: string;
@@ -127,6 +135,7 @@ export type JarvisStateSnapshot = {
   assistantFeed: string[];
   assistantRequests: AssistantRequestEntry[];
   actionLog: ActionLogEntry[];
+  preferences: UserPreferences;
 };
 
 export type DashboardInsightSnapshot = {
@@ -195,4 +204,5 @@ export type JarvisMutationRequest =
   | { type: "delete_reminder"; reminderId: string }
   | { type: "save_draft"; draftId: string; updates: Partial<EmailDraft> }
   | { type: "delete_draft"; draftId: string }
-  | { type: "create_call_followups"; callId: string };
+  | { type: "create_call_followups"; callId: string }
+  | { type: "update_preferences"; updates: Partial<UserPreferences> };

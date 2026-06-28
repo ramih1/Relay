@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { buildAssistantCommandPlan } from "@/lib/ai/agent";
 import {
   initialCalendarEvents,
   initialCalls,
@@ -50,6 +51,12 @@ function createInitialState(): JarvisStateSnapshot {
         happenedAt: new Date().toISOString(),
       },
     ],
+    preferences: {
+      theme: "carbon",
+      assistantTone: "calm",
+      digestStyle: "balanced",
+      approvalsLocked: true,
+    },
   };
 }
 
@@ -76,6 +83,10 @@ async function loadState(): Promise<JarvisStateSnapshot> {
       ...createInitialState(),
       ...parsed,
       actionLog: parsed.actionLog ?? [],
+      preferences: {
+        ...createInitialState().preferences,
+        ...parsed.preferences,
+      },
     };
   } catch {
     inMemoryState = createInitialState();
@@ -126,160 +137,23 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
   if (!input) {
     return;
   }
+  const plan = buildAssistantCommandPlan(input, state.preferences);
 
-  const lower = input.toLowerCase();
-
-  if (lower.includes("remind me")) {
-    const newAction: PendingAction = {
-      id: crypto.randomUUID(),
-      type: "create_reminder",
-      title: "Create Reminder",
-      description: "Submit project • Fri, 5:00 PM",
-      risk: "medium",
-      status: "pending",
-      payload: {
-        title: "Submit project",
-        when: "Friday, 5:00 PM",
-        repeat: "none",
-        priority: "high",
-      },
-    };
-    state.pendingActions = [newAction, ...state.pendingActions];
-    appendFeed(state, `Prepared a reminder proposal for "${input}". It is waiting in Confirmations.`);
-    recordAssistantRequest(state, {
-      input,
-      outcome: "Created a reminder proposal and sent it to confirmations.",
-      status: "proposal_created",
-    });
-    recordEvent(state, {
-      title: "Reminder proposal created",
-      detail: input,
-      category: "assistant",
-      impact: "info",
-    });
-    return;
+  if (plan.drafts?.length) {
+    state.drafts = [...plan.drafts, ...state.drafts];
   }
 
-  if (lower.includes("draft an email")) {
-    const draftId = crypto.randomUUID();
-    const newDraft: EmailDraft = {
-      id: draftId,
-      recipient: "Recipient to be confirmed",
-      subject: "Request for an Extension",
-      tone: "professional",
-      status: "draft",
-      body:
-        "Hi,\n\nI hope you're doing well. I wanted to ask whether a short extension would be possible. I have been working steadily on the assignment and would appreciate a little more time to submit my best work.\n\nThank you for considering it.\n\nBest,\nRami",
-    };
-    const newAction: PendingAction = {
-      id: crypto.randomUUID(),
-      type: "draft_email",
-      title: "Email Draft to Professor",
-      description: "Asking for extension on assignment",
-      risk: "medium",
-      status: "pending",
-      payload: { draftId },
-    };
-    state.drafts = [newDraft, ...state.drafts];
-    state.pendingActions = [newAction, ...state.pendingActions];
-    appendFeed(state, "Drafted an email request and queued it for approval before saving.");
-    recordAssistantRequest(state, {
-      input,
-      outcome: "Created an email draft proposal for review.",
-      status: "proposal_created",
-    });
-    recordEvent(state, {
-      title: "Email draft prepared",
-      detail: newAction.description,
-      category: "assistant",
-      impact: "info",
-    });
-    return;
+  if (plan.calls?.length) {
+    state.calls = [...plan.calls, ...state.calls];
   }
 
-  if (lower.includes("call")) {
-    const callId = crypto.randomUUID();
-    const newCall: CallRequest = {
-      id: callId,
-      contactName: "Campus Gym",
-      phoneNumber: "(555) 210-1184",
-      purpose: "Ask if basketball court is free tonight",
-      script:
-        "Hi, I'm JARVIS, an AI assistant calling on behalf of Rami. I'm checking whether the basketball court is free tonight and whether there are any time restrictions.",
-      allowedActions: ["Ask availability", "Ask closing time"],
-      restrictedActions: ["Do not book anything", "Do not share private details"],
-      status: "pending",
-    };
-    const newAction: PendingAction = {
-      id: crypto.randomUUID(),
-      type: "place_call",
-      title: "Call Campus Gym",
-      description: "Ask about basketball court availability",
-      risk: "high",
-      status: "pending",
-      payload: { callId },
-    };
-    state.calls = [newCall, ...state.calls];
-    state.pendingActions = [newAction, ...state.pendingActions];
-    appendFeed(state, "Created a transparent call plan with a script and allowed actions. It is waiting for approval.");
-    recordAssistantRequest(state, {
-      input,
-      outcome: "Prepared a call plan with restrictions and approval requirements.",
-      status: "proposal_created",
-    });
-    recordEvent(state, {
-      title: "Call plan prepared",
-      detail: newCall.purpose,
-      category: "call",
-      impact: "warning",
-    });
-    return;
+  if (plan.pendingActions?.length) {
+    state.pendingActions = [...plan.pendingActions, ...state.pendingActions];
   }
 
-  if (lower.includes("note") || lower.includes("task")) {
-    const newAction: PendingAction = {
-      id: crypto.randomUUID(),
-      type: "create_tasks_from_note",
-      title: "Create Task from Note",
-      description: "3 tasks identified",
-      risk: "low",
-      status: "pending",
-      payload: {
-        tasks: [
-          "Confirm timeline with professor",
-          "Clean dataset labels",
-          "Email the team the experiment checklist",
-        ],
-      },
-    };
-    state.pendingActions = [newAction, ...state.pendingActions];
-    appendFeed(state, "Extracted action items from your note and sent them to Confirmations for review.");
-    recordAssistantRequest(state, {
-      input,
-      outcome: "Extracted tasks from the note and queued them for approval.",
-      status: "proposal_created",
-    });
-    recordEvent(state, {
-      title: "Tasks extracted from note",
-      detail: "Three task suggestions moved into the approval queue.",
-      category: "assistant",
-      impact: "info",
-    });
-    return;
-  }
-
-  appendFeed(state, "I understood the request at a high level and would ask one focused follow-up before creating an action proposal in the real agent flow.");
-  recordAssistantRequest(state, {
-    input,
-    outcome: "Needs one clarifying follow-up before creating a safe proposal.",
-    status: "needs_clarification",
-  });
-  recordEvent(state, {
-    title: "Assistant requested clarification",
-    detail: input,
-    category: "assistant",
-    impact: "info",
-  });
+  appendFeed(state, plan.feedMessage);
+  recordAssistantRequest(state, plan.request);
+  recordEvent(state, plan.event);
 }
 
 function approveAction(state: JarvisStateSnapshot, actionId: string) {
@@ -425,6 +299,10 @@ export async function resetJarvisState() {
   inMemoryState = createInitialState();
   await persistState(inMemoryState);
   return getJarvisState();
+}
+
+export async function submitAssistantCommand(input: string) {
+  return applyJarvisMutation({ type: "submit_command", input });
 }
 
 export async function applyJarvisMutation(input: JarvisMutationRequest): Promise<JarvisStateSnapshot> {
@@ -761,6 +639,18 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
       }
       break;
     }
+    case "update_preferences":
+      state.preferences = {
+        ...state.preferences,
+        ...input.updates,
+      };
+      recordEvent(state, {
+        title: "Preferences updated",
+        detail: Object.keys(input.updates).join(", ") || "No fields changed",
+        category: "system",
+        impact: "info",
+      });
+      break;
   }
 
   inMemoryState = state;

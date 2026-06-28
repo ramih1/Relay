@@ -26,10 +26,17 @@ export async function getDashboardInsights(): Promise<DashboardInsightSnapshot> 
     activeReminders > 0 ? `${activeReminders} active reminder${activeReminders === 1 ? "" : "s"}` : null,
   ].filter(Boolean);
 
-  const dailyBrief =
+  const detailedBrief =
     briefParts.length > 0
       ? `Today you have ${briefParts.join(", ")}.`
       : "Today looks clear. Good moment to prepare your next reminder, email, or call plan.";
+
+  const dailyBrief =
+    state.preferences.digestStyle === "brief"
+      ? briefParts.length > 0
+        ? `Today: ${briefParts.slice(0, 3).join(", ")}.`
+        : "Today is clear."
+      : detailedBrief;
 
   const focusMessage =
     overdueCount > 0
