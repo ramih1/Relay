@@ -55,6 +55,7 @@ export type NotificationItem = {
   body: string;
   category: "urgent" | "important" | "later" | "low";
   source: string;
+  isRead?: boolean;
 };
 
 export type EmailDraft = {
@@ -111,6 +112,7 @@ export type JarvisStateSnapshot = {
   notes: Note[];
   reminders: Reminder[];
   calendarEvents: CalendarEvent[];
+  notifications: NotificationItem[];
   drafts: EmailDraft[];
   calls: CallRequest[];
   pendingActions: PendingAction[];
@@ -174,6 +176,12 @@ export type JarvisMutationRequest =
       };
     }
   | { type: "delete_calendar_event"; eventId: string }
+  | { type: "mark_notification_read"; notificationId: string }
+  | {
+      type: "update_notification_category";
+      notificationId: string;
+      category: NotificationItem["category"];
+    }
   | { type: "update_reminder"; reminderId: string; updates: Partial<Reminder> }
   | { type: "delete_reminder"; reminderId: string }
   | { type: "save_draft"; draftId: string; updates: Partial<EmailDraft> }

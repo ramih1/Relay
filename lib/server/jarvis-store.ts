@@ -5,6 +5,7 @@ import {
   initialCalls,
   initialEmailDrafts,
   initialNotes,
+  initialNotifications,
   initialPendingActions,
   initialReminders,
   initialTasks,
@@ -30,6 +31,7 @@ function createInitialState(): JarvisStateSnapshot {
     notes: structuredClone(initialNotes),
     reminders: structuredClone(initialReminders),
     calendarEvents: structuredClone(initialCalendarEvents),
+    notifications: structuredClone(initialNotifications),
     drafts: structuredClone(initialEmailDrafts),
     calls: structuredClone(initialCalls),
     pendingActions: structuredClone(initialPendingActions),
@@ -594,6 +596,40 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
             detail: event.title,
             category: "productivity",
             impact: "warning",
+          });
+        }
+      }
+      break;
+    case "mark_notification_read":
+      {
+        const notification = state.notifications.find((item) => item.id === input.notificationId);
+        state.notifications = state.notifications.map((notification) =>
+          notification.id === input.notificationId ? { ...notification, isRead: true } : notification,
+        );
+        if (notification) {
+          recordEvent(state, {
+            title: "Notification marked read",
+            detail: notification.title,
+            category: "productivity",
+            impact: "info",
+          });
+        }
+      }
+      break;
+    case "update_notification_category":
+      {
+        const notification = state.notifications.find((item) => item.id === input.notificationId);
+        state.notifications = state.notifications.map((notification) =>
+          notification.id === input.notificationId
+            ? { ...notification, category: input.category }
+            : notification,
+        );
+        if (notification) {
+          recordEvent(state, {
+            title: "Notification priority updated",
+            detail: `${notification.title} -> ${input.category}`,
+            category: "productivity",
+            impact: "info",
           });
         }
       }

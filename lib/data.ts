@@ -109,6 +109,7 @@ export const initialNotifications: NotificationItem[] = [
     body: "Your machine learning project submission window ends at 5 PM today.",
     category: "urgent",
     source: "University LMS",
+    isRead: false,
   },
   {
     id: "notif-2",
@@ -116,6 +117,7 @@ export const initialNotifications: NotificationItem[] = [
     body: "Design review shifted by 30 minutes. Updated agenda attached.",
     category: "important",
     source: "Work",
+    isRead: false,
   },
   {
     id: "notif-3",
@@ -123,6 +125,7 @@ export const initialNotifications: NotificationItem[] = [
     body: "Autopay runs tomorrow morning.",
     category: "later",
     source: "Finance",
+    isRead: false,
   },
   {
     id: "notif-4",
@@ -130,6 +133,7 @@ export const initialNotifications: NotificationItem[] = [
     body: "Summer intramural signups are open.",
     category: "low",
     source: "Campus Gym",
+    isRead: true,
   },
 ];
 

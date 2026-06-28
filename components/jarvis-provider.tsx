@@ -6,6 +6,7 @@ import {
   initialCalls,
   initialEmailDrafts,
   initialNotes,
+  initialNotifications,
   initialPendingActions,
   initialReminders,
   initialTasks,
@@ -17,6 +18,7 @@ import type {
   JarvisMutationRequest,
   JarvisStateSnapshot,
   Note,
+  NotificationItem,
   PendingAction,
   Reminder,
   Task,
@@ -55,6 +57,7 @@ type JarvisStore = {
   notes: Note[];
   reminders: Reminder[];
   calendarEvents: CalendarEvent[];
+  notifications: NotificationItem[];
   drafts: EmailDraft[];
   calls: JarvisStateSnapshot["calls"];
   pendingActions: PendingAction[];
@@ -73,6 +76,8 @@ type JarvisStore = {
   addReminder: (input: NewReminderInput) => Promise<void>;
   addCalendarEvent: (input: NewCalendarEventInput) => Promise<void>;
   deleteCalendarEvent: (eventId: string) => Promise<void>;
+  markNotificationRead: (notificationId: string) => Promise<void>;
+  updateNotificationCategory: (notificationId: string, category: NotificationItem["category"]) => Promise<void>;
   updateReminder: (reminderId: string, updates: Partial<Reminder>) => Promise<void>;
   deleteReminder: (reminderId: string) => Promise<void>;
   saveDraft: (draftId: string, updates: Partial<EmailDraft>) => Promise<void>;
@@ -88,6 +93,7 @@ const fallbackState: JarvisStateSnapshot = {
   notes: initialNotes,
   reminders: initialReminders,
   calendarEvents: initialCalendarEvents,
+  notifications: initialNotifications,
   drafts: initialEmailDrafts,
   calls: initialCalls,
   pendingActions: initialPendingActions,
@@ -167,6 +173,9 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       addReminder: async (input) => mutate({ type: "add_reminder", input }),
       addCalendarEvent: async (input) => mutate({ type: "add_calendar_event", input }),
       deleteCalendarEvent: async (eventId) => mutate({ type: "delete_calendar_event", eventId }),
+      markNotificationRead: async (notificationId) => mutate({ type: "mark_notification_read", notificationId }),
+      updateNotificationCategory: async (notificationId, category) =>
+        mutate({ type: "update_notification_category", notificationId, category }),
       updateReminder: async (reminderId, updates) => mutate({ type: "update_reminder", reminderId, updates }),
       deleteReminder: async (reminderId) => mutate({ type: "delete_reminder", reminderId }),
       saveDraft: async (draftId, updates) => mutate({ type: "save_draft", draftId, updates }),

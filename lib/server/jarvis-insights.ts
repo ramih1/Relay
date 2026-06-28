@@ -1,4 +1,3 @@
-import { initialNotifications } from "@/lib/data";
 import { getJarvisState } from "@/lib/server/jarvis-store";
 import type { DashboardInsightSnapshot, NotificationItem } from "@/lib/types";
 
@@ -41,7 +40,7 @@ export async function getDashboardInsights(): Promise<DashboardInsightSnapshot> 
           ? "A short focus block on the high-priority tasks would create the most momentum right now."
           : "You have room to plan ahead. Use the assistant bar to prepare your next move before the day gets busier.";
 
-  const rankedNotifications = [...initialNotifications].sort(
+  const rankedNotifications = [...state.notifications].sort(
     (left, right) => notificationRank[left.category] - notificationRank[right.category],
   );
 

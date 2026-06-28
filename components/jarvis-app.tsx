@@ -26,7 +26,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { initialNotifications } from "@/lib/data";
 import type { CalendarEvent, DashboardInsightSnapshot, EmailDraft, NavKey, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
 import { useJarvis } from "@/components/jarvis-provider";
 
@@ -80,6 +79,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     notes,
     reminders,
     calendarEvents,
+    notifications,
     drafts,
     calls,
     pendingActions,
@@ -97,6 +97,8 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     addReminder,
     addCalendarEvent,
     deleteCalendarEvent,
+    markNotificationRead,
+    updateNotificationCategory,
     updateReminder,
     deleteReminder,
     saveDraft,
@@ -616,8 +618,13 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
                     <DashboardPanel title="Notifications Intelligence" actionLabel="View all" href="/notifications">
                       <div className="space-y-4">
-                        {initialNotifications.map((notification) => (
-                          <NotificationRow key={notification.id} notification={(insights?.rankedNotifications ?? initialNotifications).find((item) => item.id === notification.id) ?? notification} />
+                        {(insights?.rankedNotifications ?? notifications).map((notification) => (
+                          <NotificationRow
+                            key={notification.id}
+                            notification={notification}
+                            onMarkRead={() => markNotificationRead(notification.id)}
+                            onRecategory={(category) => updateNotificationCategory(notification.id, category)}
+                          />
                         ))}
                       </div>
                     </DashboardPanel>
@@ -1247,10 +1254,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               {section === "notifications" ? (
                 <SectionPage eyebrow="Notifications" title="See what matters now." description="JARVIS groups mock notifications by urgency so the dashboard stays calm instead of noisy.">
                   <div className="mb-4 grid gap-4 md:grid-cols-4">
-                    <MetricCard label="Urgent" value={String((insights?.rankedNotifications ?? initialNotifications).filter((n) => n.category === "urgent").length)} detail="Needs attention now" />
-                    <MetricCard label="Important" value={String((insights?.rankedNotifications ?? initialNotifications).filter((n) => n.category === "important").length)} detail="Worth looking at soon" />
-                    <MetricCard label="Later" value={String((insights?.rankedNotifications ?? initialNotifications).filter((n) => n.category === "later").length)} detail="Can wait" />
-                    <MetricCard label="Low" value={String((insights?.rankedNotifications ?? initialNotifications).filter((n) => n.category === "low").length)} detail="Background noise" />
+                    <MetricCard label="Urgent" value={String((insights?.rankedNotifications ?? notifications).filter((n) => n.category === "urgent").length)} detail="Needs attention now" />
+                    <MetricCard label="Important" value={String((insights?.rankedNotifications ?? notifications).filter((n) => n.category === "important").length)} detail="Worth looking at soon" />
+                    <MetricCard label="Later" value={String((insights?.rankedNotifications ?? notifications).filter((n) => n.category === "later").length)} detail="Can wait" />
+                    <MetricCard label="Low" value={String((insights?.rankedNotifications ?? notifications).filter((n) => n.category === "low").length)} detail="Background noise" />
                   </div>
                   <div className="mb-4">
                     <DashboardPanel title="What Matters Now">
@@ -1261,8 +1268,13 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                   </div>
                   <DashboardPanel title="Notification Ranking">
                     <div className="space-y-5">
-                      {(insights?.rankedNotifications ?? initialNotifications).map((notification) => (
-                        <NotificationRow key={notification.id} notification={notification} />
+                      {(insights?.rankedNotifications ?? notifications).map((notification) => (
+                        <NotificationRow
+                          key={notification.id}
+                          notification={notification}
+                          onMarkRead={() => markNotificationRead(notification.id)}
+                          onRecategory={(category) => updateNotificationCategory(notification.id, category)}
+                        />
                       ))}
                     </div>
                   </DashboardPanel>
@@ -1989,7 +2001,15 @@ function iconSymbol(type: PendingAction["type"]) {
   return "✓";
 }
 
-function NotificationRow({ notification }: { notification: NotificationItem }) {
+function NotificationRow({
+  notification,
+  onMarkRead,
+  onRecategory,
+}: {
+  notification: NotificationItem;
+  onMarkRead?: () => void;
+  onRecategory?: (category: NotificationItem["category"]) => void;
+}) {
   return (
     <div className="flex items-start gap-4">
       <div className="notification-icon">
@@ -2004,10 +2024,36 @@ function NotificationRow({ notification }: { notification: NotificationItem }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="title-main text-xl">{notification.source}</p>
+            <div className="flex items-center gap-2">
+              <p className="title-main text-xl">{notification.source}</p>
+              {notification.isRead ? <span className="copy-soft text-xs uppercase tracking-[0.16em]">Read</span> : null}
+            </div>
             <p className="copy-soft mt-1 text-sm">{notification.body}</p>
           </div>
           <StatusPill value={notification.category} tone={notification.category === "urgent" ? "danger" : notification.category === "important" ? "warning" : "neutral"} />
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {!notification.isRead && onMarkRead ? (
+            <button type="button" className="small-action" onClick={onMarkRead}>
+              Mark read
+            </button>
+          ) : null}
+          {onRecategory ? (
+            <>
+              <button type="button" className="small-action" onClick={() => onRecategory("urgent")}>
+                Urgent
+              </button>
+              <button type="button" className="small-action" onClick={() => onRecategory("important")}>
+                Important
+              </button>
+              <button type="button" className="small-action" onClick={() => onRecategory("later")}>
+                Later
+              </button>
+              <button type="button" className="small-action" onClick={() => onRecategory("low")}>
+                Low
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
