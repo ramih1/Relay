@@ -13,6 +13,7 @@ import {
 } from "@/lib/data";
 import type {
   ActionLogEntry,
+  AssistantRequestEntry,
   CalendarEvent,
   EmailDraft,
   JarvisMutationRequest,
@@ -62,6 +63,7 @@ type JarvisStore = {
   calls: JarvisStateSnapshot["calls"];
   pendingActions: PendingAction[];
   assistantFeed: string[];
+  assistantRequests: AssistantRequestEntry[];
   actionLog: ActionLogEntry[];
   submitCommand: (input: string) => Promise<void>;
   approveAction: (actionId: string) => Promise<void>;
@@ -100,6 +102,7 @@ const fallbackState: JarvisStateSnapshot = {
   assistantFeed: [
     "I can prepare reminders, email drafts, note summaries, and simulated call plans. Important actions always wait for your approval.",
   ],
+  assistantRequests: [],
   actionLog: [],
 };
 

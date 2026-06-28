@@ -12,6 +12,7 @@ import {
 } from "@/lib/data";
 import type {
   ActionLogEntry,
+  AssistantRequestEntry,
   CallRequest,
   EmailDraft,
   JarvisMutationRequest,
@@ -38,6 +39,7 @@ function createInitialState(): JarvisStateSnapshot {
     assistantFeed: [
       "I can prepare reminders, email drafts, note summaries, and simulated call plans. Important actions always wait for your approval.",
     ],
+    assistantRequests: [],
     actionLog: [
       {
         id: "log-seed-1",
@@ -87,6 +89,20 @@ function appendFeed(state: JarvisStateSnapshot, message: string) {
   state.assistantFeed = [message, ...state.assistantFeed];
 }
 
+function recordAssistantRequest(
+  state: JarvisStateSnapshot,
+  entry: Omit<AssistantRequestEntry, "id" | "happenedAt">,
+) {
+  state.assistantRequests = [
+    {
+      id: crypto.randomUUID(),
+      happenedAt: new Date().toISOString(),
+      ...entry,
+    },
+    ...state.assistantRequests,
+  ].slice(0, 30);
+}
+
 function recordEvent(
   state: JarvisStateSnapshot,
   entry: Omit<ActionLogEntry, "id" | "happenedAt">,
@@ -130,6 +146,11 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
     };
     state.pendingActions = [newAction, ...state.pendingActions];
     appendFeed(state, `Prepared a reminder proposal for "${input}". It is waiting in Confirmations.`);
+    recordAssistantRequest(state, {
+      input,
+      outcome: "Created a reminder proposal and sent it to confirmations.",
+      status: "proposal_created",
+    });
     recordEvent(state, {
       title: "Reminder proposal created",
       detail: input,
@@ -162,6 +183,11 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
     state.drafts = [newDraft, ...state.drafts];
     state.pendingActions = [newAction, ...state.pendingActions];
     appendFeed(state, "Drafted an email request and queued it for approval before saving.");
+    recordAssistantRequest(state, {
+      input,
+      outcome: "Created an email draft proposal for review.",
+      status: "proposal_created",
+    });
     recordEvent(state, {
       title: "Email draft prepared",
       detail: newAction.description,
@@ -196,6 +222,11 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
     state.calls = [newCall, ...state.calls];
     state.pendingActions = [newAction, ...state.pendingActions];
     appendFeed(state, "Created a transparent call plan with a script and allowed actions. It is waiting for approval.");
+    recordAssistantRequest(state, {
+      input,
+      outcome: "Prepared a call plan with restrictions and approval requirements.",
+      status: "proposal_created",
+    });
     recordEvent(state, {
       title: "Call plan prepared",
       detail: newCall.purpose,
@@ -223,6 +254,11 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
     };
     state.pendingActions = [newAction, ...state.pendingActions];
     appendFeed(state, "Extracted action items from your note and sent them to Confirmations for review.");
+    recordAssistantRequest(state, {
+      input,
+      outcome: "Extracted tasks from the note and queued them for approval.",
+      status: "proposal_created",
+    });
     recordEvent(state, {
       title: "Tasks extracted from note",
       detail: "Three task suggestions moved into the approval queue.",
@@ -233,6 +269,11 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
   }
 
   appendFeed(state, "I understood the request at a high level and would ask one focused follow-up before creating an action proposal in the real agent flow.");
+  recordAssistantRequest(state, {
+    input,
+    outcome: "Needs one clarifying follow-up before creating a safe proposal.",
+    status: "needs_clarification",
+  });
   recordEvent(state, {
     title: "Assistant requested clarification",
     detail: input,

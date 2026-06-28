@@ -84,6 +84,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     calls,
     pendingActions,
     assistantFeed,
+    assistantRequests,
     actionLog,
     submitCommand,
     approveAction,
@@ -746,16 +747,14 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
                   <div className="mt-4 feature-panel">
                     <div className="mb-4 flex items-center justify-between">
-                      <p className="eyebrow">Assistant Feed</p>
+                      <p className="eyebrow">Assistant Requests</p>
                       <Link href="/assistant" className="panel-link">
                         Open Assistant
                       </Link>
                     </div>
                     <div className="grid gap-3 lg:grid-cols-2">
-                      {assistantFeed.slice(0, 4).map((message) => (
-                        <div key={message} className="app-card copy-strong p-4 text-sm leading-7">
-                          {message}
-                        </div>
+                      {assistantRequests.slice(0, 4).map((request) => (
+                        <AssistantRequestCard key={request.id} request={request} compact />
                       ))}
                     </div>
                   </div>
@@ -1003,13 +1002,11 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               {section === "assistant" ? (
                 <SectionPage eyebrow="Assistant" title="Natural language in, structured actions out." description="This workspace shows the command patterns and the running assistant feed behind the dashboard.">
                   <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-                    <DashboardPanel title="Recent Assistant Feed">
-                      {assistantFeed.length > 0 ? (
+                    <DashboardPanel title="Recent Assistant Requests">
+                      {assistantRequests.length > 0 ? (
                         <div className="space-y-3">
-                          {assistantFeed.map((message) => (
-                            <div key={message} className="app-card copy-strong p-4 text-sm leading-7">
-                              {message}
-                            </div>
+                          {assistantRequests.map((request) => (
+                            <AssistantRequestCard key={request.id} request={request} />
                           ))}
                         </div>
                       ) : (
@@ -1584,6 +1581,36 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
     <div className="app-card p-4">
       <p className="copy-soft text-xs uppercase tracking-[0.16em]">{label}</p>
       <p className="title-main mt-2 text-2xl">{value}</p>
+    </div>
+  );
+}
+
+function AssistantRequestCard({
+  request,
+  compact = false,
+}: {
+  request: {
+    input: string;
+    outcome: string;
+    status: "queued" | "proposal_created" | "needs_clarification";
+    happenedAt: string;
+  };
+  compact?: boolean;
+}) {
+  return (
+    <div className="app-card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="accent-copy text-xs uppercase tracking-[0.18em]">Assistant request</p>
+          <p className="title-main mt-2 text-base">{request.input}</p>
+          <p className="copy-soft mt-2 text-sm leading-6">{compact && request.outcome.length > 120 ? `${request.outcome.slice(0, 117)}...` : request.outcome}</p>
+        </div>
+        <StatusPill
+          value={request.status}
+          tone={request.status === "proposal_created" ? "success" : request.status === "needs_clarification" ? "warning" : "neutral"}
+        />
+      </div>
+      <p className="copy-soft mt-3 text-xs uppercase tracking-[0.16em]">{formatAuditTime(request.happenedAt)}</p>
     </div>
   );
 }

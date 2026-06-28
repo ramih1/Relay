@@ -107,6 +107,14 @@ export type ActionLogEntry = {
   happenedAt: string;
 };
 
+export type AssistantRequestEntry = {
+  id: string;
+  input: string;
+  outcome: string;
+  status: "queued" | "proposal_created" | "needs_clarification";
+  happenedAt: string;
+};
+
 export type JarvisStateSnapshot = {
   tasks: Task[];
   notes: Note[];
@@ -117,6 +125,7 @@ export type JarvisStateSnapshot = {
   calls: CallRequest[];
   pendingActions: PendingAction[];
   assistantFeed: string[];
+  assistantRequests: AssistantRequestEntry[];
   actionLog: ActionLogEntry[];
 };
 
