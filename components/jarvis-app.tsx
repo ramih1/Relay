@@ -1384,8 +1384,27 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                             ))}
                           </div>
                         </div>
+                        <div>
+                          <p className="copy-soft text-xs uppercase tracking-[0.18em]">Approval lock</p>
+                          <div className="mt-3 flex flex-wrap gap-3">
+                            <button
+                              type="button"
+                              onClick={() => void updatePreferences({ approvalsLocked: true })}
+                              className={clsx("theme-pill", preferences.approvalsLocked && "active")}
+                            >
+                              Require confirmations
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void updatePreferences({ approvalsLocked: false })}
+                              className={clsx("theme-pill", !preferences.approvalsLocked && "active")}
+                            >
+                              Auto-apply low risk
+                            </button>
+                          </div>
+                        </div>
                         <p className="copy-strong text-sm leading-7">
-                          Important actions still require explicit approval, and simulated calls continue to identify JARVIS clearly on your behalf.
+                          High-risk actions still require explicit approval, and simulated calls continue to identify JARVIS clearly on your behalf.
                         </p>
                       </div>
                     </DashboardPanel>

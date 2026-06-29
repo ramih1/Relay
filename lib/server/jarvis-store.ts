@@ -163,6 +163,20 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
   appendFeed(state, plan.feedMessage);
   recordAssistantRequest(state, plan.request);
   recordEvent(state, plan.event);
+
+  if (!state.preferences.approvalsLocked && plan.pendingActions?.every((action) => action.risk === "low")) {
+    for (const action of plan.pendingActions) {
+      approveAction(state, action.id);
+    }
+
+    appendFeed(state, "Low-risk approval lock is off, so I applied that safe action directly.");
+    recordEvent(state, {
+      title: "Low-risk action auto-approved",
+      detail: plan.pendingActions.map((action) => action.title).join(", "),
+      category: "approval",
+      impact: "success",
+    });
+  }
 }
 
 function approveAction(state: JarvisStateSnapshot, actionId: string) {
