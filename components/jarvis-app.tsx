@@ -1262,10 +1262,45 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                                 <div>
                                   <p className="title-main text-xl">{call.contactName}</p>
                                   <p className="mt-1 text-sm text-muted">{call.purpose}</p>
+                                  <p className="copy-soft mt-2 text-sm">{call.phoneNumber}</p>
                                 </div>
                                 <StatusPill value={call.status} tone={call.status === "pending" ? "warning" : "success"} />
                               </div>
                               <p className="copy-strong mt-4 text-sm leading-7">{call.script}</p>
+                              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                <div className="soft-card p-4">
+                                  <p className="accent-copy text-xs uppercase tracking-[0.18em]">Allowed</p>
+                                  <ul className="copy-strong mt-3 space-y-2 text-sm leading-6">
+                                    {call.allowedActions.map((item) => (
+                                      <li key={item}>• {item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                                <div className="soft-card p-4">
+                                  <p className="accent-copy text-xs uppercase tracking-[0.18em]">Restricted</p>
+                                  <ul className="copy-strong mt-3 space-y-2 text-sm leading-6">
+                                    {call.restrictedActions.map((item) => (
+                                      <li key={item}>• {item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+                              {call.status === "pending" ? (
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    className="jarvis-button"
+                                    onClick={() => {
+                                      const pendingCall = pendingApprovals.find((action) => action.type === "place_call" && String(action.payload.callId) === call.id);
+                                      if (pendingCall) {
+                                        approveAction(pendingCall.id);
+                                      }
+                                    }}
+                                  >
+                                    Approve simulated call
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
                           ))}
                         </div>
@@ -1281,13 +1316,32 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         </pre>
                       ) : null}
                       {calls[0]?.status === "simulated" ? (
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <button type="button" className="small-action primary" onClick={() => createCallFollowups(calls[0].id)}>
-                            Create follow-ups
-                          </button>
-                          <button type="button" className="small-action" onClick={() => submitCommand("Remind me to leave for the gym at 6:45 PM")}>
-                            Quick reminder
-                          </button>
+                        <div className="mt-4 space-y-4">
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <div className="soft-card p-4">
+                              <p className="title-main text-base">Reminder</p>
+                              <p className="copy-soft mt-2 text-sm leading-6">Leave by 6:45 PM so the court window still works.</p>
+                            </div>
+                            <div className="soft-card p-4">
+                              <p className="title-main text-base">Task</p>
+                              <p className="copy-soft mt-2 text-sm leading-6">Text friends and confirm who is joining tonight.</p>
+                            </div>
+                            <div className="soft-card p-4">
+                              <p className="title-main text-base">Calendar</p>
+                              <p className="copy-soft mt-2 text-sm leading-6">Block out the basketball run directly on the schedule.</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" className="small-action primary" onClick={() => createCallFollowups(calls[0].id)}>
+                              Create follow-up approvals
+                            </button>
+                            <button type="button" className="small-action" onClick={() => submitCommand("Remind me to leave for the gym at 6:45 PM")}>
+                              Quick reminder
+                            </button>
+                            <button type="button" className="small-action" onClick={() => submitCommand("Create task to text friends about basketball tonight")}>
+                              Draft task
+                            </button>
+                          </div>
                         </div>
                       ) : null}
                     </DashboardPanel>

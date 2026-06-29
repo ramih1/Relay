@@ -680,23 +680,55 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
     case "create_call_followups": {
       const call = state.calls.find((item) => item.id === input.callId);
       if (call) {
-        const newAction: PendingAction = {
-          id: crypto.randomUUID(),
-          type: "create_followup_task",
-          title: "Save follow-up reminder",
-          description: `Leave for ${call.contactName} at 6:45 PM`,
-          risk: "medium",
-          status: "pending",
-          payload: {
-            title: `Leave for ${call.contactName}`,
-            when: "Today, 6:45 PM",
+        const newActions: PendingAction[] = [
+          {
+            id: crypto.randomUUID(),
+            type: "create_followup_task",
+            title: "Save follow-up reminder",
+            description: `Leave for ${call.contactName} at 6:45 PM`,
+            risk: "medium",
+            status: "pending",
+            payload: {
+              title: `Leave for ${call.contactName}`,
+              when: "Today, 6:45 PM",
+            },
           },
-        };
-        state.pendingActions = [newAction, ...state.pendingActions];
-        appendFeed(state, `Prepared a follow-up reminder based on the ${call.contactName} call summary.`);
+          {
+            id: crypto.randomUUID(),
+            type: "create_task",
+            title: "Create follow-up task",
+            description: "Text friends about basketball tonight",
+            risk: "medium",
+            status: "pending",
+            payload: {
+              title: "Text friends about basketball tonight",
+              due: "Today at 6:00 PM",
+              priority: "medium",
+              description: `Follow up after the ${call.contactName} call summary.`,
+            },
+          },
+          {
+            id: crypto.randomUUID(),
+            type: "create_calendar_event",
+            title: "Add basketball plan to calendar",
+            description: `${call.contactName} at 7:30 PM`,
+            risk: "medium",
+            status: "pending",
+            payload: {
+              title: "Basketball run",
+              detail: `Planned after the ${call.contactName} call result.`,
+              start: "Today at 7:30 PM",
+              end: "Today at 9:00 PM",
+              location: call.contactName,
+              tone: "teal",
+            },
+          },
+        ];
+        state.pendingActions = [...newActions, ...state.pendingActions];
+        appendFeed(state, `Prepared follow-up suggestions based on the ${call.contactName} call summary.`);
         recordEvent(state, {
-          title: "Follow-up proposal created",
-          detail: call.contactName,
+          title: "Follow-up proposals created",
+          detail: `${call.contactName} • ${newActions.length} actions`,
           category: "call",
           impact: "info",
         });
