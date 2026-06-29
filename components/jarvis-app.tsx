@@ -2124,6 +2124,22 @@ function EditableConfirmationCard({
             />
           ) : null}
 
+          {action.type === "create_task" ? (
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <input value={String(action.payload.title ?? "")} onChange={(e) => onChange(action.id, { payload: { title: e.target.value } })} placeholder="Task title" className="field-input" />
+              <input value={String(action.payload.due ?? "")} onChange={(e) => onChange(action.id, { payload: { due: e.target.value } })} placeholder="Due" className="field-input" />
+            </div>
+          ) : null}
+
+          {action.type === "create_calendar_event" ? (
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <input value={String(action.payload.title ?? "")} onChange={(e) => onChange(action.id, { payload: { title: e.target.value } })} placeholder="Event title" className="field-input" />
+              <input value={String(action.payload.start ?? "")} onChange={(e) => onChange(action.id, { payload: { start: e.target.value } })} placeholder="Start" className="field-input" />
+              <input value={String(action.payload.end ?? "")} onChange={(e) => onChange(action.id, { payload: { end: e.target.value } })} placeholder="End" className="field-input" />
+              <input value={String(action.payload.location ?? "")} onChange={(e) => onChange(action.id, { payload: { location: e.target.value } })} placeholder="Location" className="field-input" />
+            </div>
+          ) : null}
+
           <div className="mt-4 flex gap-2">
             <button type="button" onClick={onApprove} className="small-action primary">
               Approve
@@ -2203,6 +2219,9 @@ function iconToneClass(type: PendingAction["type"]) {
   if (type === "place_call") {
     return "bg-[#5a4166] text-[#eadbff]";
   }
+  if (type === "create_calendar_event") {
+    return "bg-[#3d4f76] text-[#dfe8ff]";
+  }
   return "bg-[#6a4e2a] text-[#f6e2bc]";
 }
 
@@ -2215,6 +2234,9 @@ function iconSymbol(type: PendingAction["type"]) {
   }
   if (type === "place_call") {
     return "◔";
+  }
+  if (type === "create_calendar_event") {
+    return "◫";
   }
   return "✓";
 }

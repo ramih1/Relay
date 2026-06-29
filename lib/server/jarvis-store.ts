@@ -240,6 +240,21 @@ function approveAction(state: JarvisStateSnapshot, actionId: string) {
     ];
   }
 
+  if (action.type === "create_calendar_event") {
+    state.calendarEvents = [
+      {
+        id: crypto.randomUUID(),
+        title: String(action.payload.title ?? "New event"),
+        detail: String(action.payload.detail ?? ""),
+        start: String(action.payload.start ?? "Today at 1:00 PM"),
+        end: String(action.payload.end ?? "Later"),
+        location: String(action.payload.location ?? ""),
+        tone: (action.payload.tone as Task["priority"] extends never ? never : "teal" | "gold" | "rose") ?? "teal",
+      },
+      ...state.calendarEvents,
+    ];
+  }
+
   if (action.type === "draft_email") {
     const draftId = String(action.payload.draftId);
     state.drafts = state.drafts.map((draft) => (draft.id === draftId ? { ...draft, status: "approved" } : draft));

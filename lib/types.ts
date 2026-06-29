@@ -104,6 +104,7 @@ export type CallRequest = {
 export type PendingActionType =
   | "create_reminder"
   | "create_task"
+  | "create_calendar_event"
   | "draft_email"
   | "create_tasks_from_note"
   | "place_call"

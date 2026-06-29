@@ -102,6 +102,91 @@ function inferPriority(input: string): Task["priority"] | Reminder["priority"] {
   return "low";
 }
 
+function buildTaskPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+  const title = sentenceCase(
+    input
+      .replace(/^(add|create|make)\s+(a\s+)?task\s+to\s+/i, "")
+      .replace(/^task\s*:\s*/i, "")
+      .replace(/\b(today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b.*$/i, "")
+      .trim() || "Follow up task",
+  );
+  const due = extractTimePhrase(input);
+  const priority = inferPriority(input) as Task["priority"];
+
+  return {
+    feedMessage: withTone(`Prepared a task proposal for "${title}". It is waiting in Confirmations.`, preferences.assistantTone),
+    request: {
+      input,
+      outcome: `Created a task proposal due ${due}.`,
+      status: "proposal_created",
+    },
+    event: {
+      title: "Task proposal created",
+      detail: `${title} • ${due}`,
+      category: "assistant",
+      impact: "info",
+    },
+    pendingActions: [
+      {
+        id: crypto.randomUUID(),
+        type: "create_task",
+        title: "Create Task",
+        description: `${title} • ${due}`,
+        risk: "medium",
+        status: "pending",
+        payload: { title, due, priority, description: "" },
+      },
+    ],
+  };
+}
+
+function buildCalendarPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+  const title = sentenceCase(
+    input
+      .replace(/^(schedule|create|add)\s+(an?\s+)?(event|meeting|calendar event)\s*/i, "")
+      .replace(/^for\s+/i, "")
+      .replace(/\b(today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b.*$/i, "")
+      .trim() || "New event",
+  );
+  const start = extractTimePhrase(input);
+  const end = start.includes(" at ") ? start.replace(/ at /i, " until ") : "Later";
+
+  return {
+    feedMessage: withTone(`Prepared a calendar proposal for "${title}". It is waiting in Confirmations.`, preferences.assistantTone),
+    request: {
+      input,
+      outcome: `Created a calendar proposal for ${start}.`,
+      status: "proposal_created",
+    },
+    event: {
+      title: "Calendar proposal created",
+      detail: `${title} • ${start}`,
+      category: "assistant",
+      impact: "info",
+    },
+    pendingActions: [
+      {
+        id: crypto.randomUUID(),
+        type: "create_calendar_event",
+        title: "Create Calendar Event",
+        description: `${title} • ${start}`,
+        risk: "medium",
+        status: "pending",
+        payload: {
+          title,
+          detail: "Planned through assistant",
+          start,
+          end,
+          location: "",
+          tone: "teal",
+        },
+      },
+    ],
+  };
+}
+
 function buildReminderPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
   const input = cleanText(rawInput);
   const normalized = input.replace(/^remind me to\s+/i, "").replace(/^set a reminder to\s+/i, "");
@@ -402,6 +487,21 @@ export function buildAssistantCommandPlan(
 
   if (/(turn this note into tasks|extract tasks|action items|tasks from note)/i.test(lower)) {
     return buildTaskExtractionPlan(input, preferences);
+  }
+
+  if (/^(add|create|make)\s+(a\s+)?task\b|^task\s*:/i.test(lower)) {
+    return buildTaskPlan(input, preferences);
+  }
+
+  if (/^(schedule|create|add)\s+(an?\s+)?(event|meeting|calendar event)\b/i.test(lower)) {
+    if (!integrations.calendar) {
+      return buildClarificationPlan(
+        "Calendar planning is currently disabled in Settings. Turn it back on to prepare calendar actions.",
+        preferences,
+      );
+    }
+
+    return buildCalendarPlan(input, preferences);
   }
 
   return buildClarificationPlan(input, preferences);
