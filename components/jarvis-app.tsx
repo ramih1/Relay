@@ -99,6 +99,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     actionLog,
     preferences,
     profile,
+    integrations,
     submitCommand,
     approveAction,
     cancelAction,
@@ -122,6 +123,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     createCallFollowups,
     updatePreferences,
     updateProfile,
+    updateIntegrations,
     resetState,
   } = useJarvis();
 
@@ -1352,6 +1354,38 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         </button>
                       </div>
                     </DashboardPanel>
+                    <DashboardPanel title="Integration Permissions">
+                      <div className="space-y-4">
+                        <IntegrationToggle
+                          label="Calendar planning"
+                          description="Lets JARVIS prepare and store local calendar events for your schedule."
+                          enabled={integrations.calendar}
+                          onToggle={() => void updateIntegrations({ calendar: !integrations.calendar })}
+                        />
+                        <IntegrationToggle
+                          label="Email drafts"
+                          description="Allows the assistant to prepare email drafts for confirmation."
+                          enabled={integrations.emailDrafts}
+                          onToggle={() => void updateIntegrations({ emailDrafts: !integrations.emailDrafts })}
+                        />
+                        <IntegrationToggle
+                          label="Call assistant"
+                          description="Allows JARVIS to prepare transparent simulated call plans on your behalf."
+                          enabled={integrations.callAssistant}
+                          onToggle={() => void updateIntegrations({ callAssistant: !integrations.callAssistant })}
+                        />
+                        <IntegrationToggle
+                          label="Share context with AI"
+                          description="Lets JARVIS use your notes, tasks, and reminders when preparing summaries and suggestions."
+                          enabled={integrations.shareContextWithAi}
+                          onToggle={() =>
+                            void updateIntegrations({ shareContextWithAi: !integrations.shareContextWithAi })
+                          }
+                        />
+                      </div>
+                    </DashboardPanel>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <DashboardPanel title="Assistant Preferences">
                       <div className="space-y-5">
                         <div>
@@ -2124,6 +2158,36 @@ function HistoryConfirmationCard({ action }: { action: PendingAction }) {
             Risk: {action.risk}
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function IntegrationToggle({
+  label,
+  description,
+  enabled,
+  onToggle,
+}: {
+  label: string;
+  description: string;
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="app-card p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="title-main text-base">{label}</p>
+          <p className="mt-1 text-sm text-muted">{description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          className={clsx("theme-pill shrink-0", enabled && "active")}
+        >
+          {enabled ? "Enabled" : "Disabled"}
+        </button>
       </div>
     </div>
   );

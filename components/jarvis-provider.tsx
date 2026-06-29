@@ -23,6 +23,7 @@ import type {
   PendingAction,
   Reminder,
   Task,
+  IntegrationState,
   UserPreferences,
   UserProfile,
 } from "@/lib/types";
@@ -69,6 +70,7 @@ type JarvisStore = {
   actionLog: ActionLogEntry[];
   preferences: UserPreferences;
   profile: UserProfile;
+  integrations: IntegrationState;
   submitCommand: (input: string) => Promise<void>;
   approveAction: (actionId: string) => Promise<void>;
   cancelAction: (actionId: string) => Promise<void>;
@@ -93,6 +95,7 @@ type JarvisStore = {
   createCallFollowups: (callId: string) => Promise<void>;
   updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
+  updateIntegrations: (updates: Partial<IntegrationState>) => Promise<void>;
   resetState: () => Promise<void>;
 };
 
@@ -120,6 +123,12 @@ const fallbackState: JarvisStateSnapshot = {
     name: "Rami",
     email: "rami@example.com",
     role: "Student",
+  },
+  integrations: {
+    calendar: true,
+    emailDrafts: true,
+    callAssistant: true,
+    shareContextWithAi: true,
   },
 };
 
@@ -220,6 +229,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       createCallFollowups: async (callId) => mutate({ type: "create_call_followups", callId }),
       updatePreferences: async (updates) => mutate({ type: "update_preferences", updates }),
       updateProfile: async (updates) => mutate({ type: "update_profile", updates }),
+      updateIntegrations: async (updates) => mutate({ type: "update_integrations", updates }),
       resetState: async () => mutate({ type: "reset_state" }),
     }),
     [state],

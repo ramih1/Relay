@@ -10,6 +10,21 @@ const notificationRank: Record<NotificationItem["category"], number> = {
 
 export async function getDashboardInsights(): Promise<DashboardInsightSnapshot> {
   const state = await getJarvisState();
+  if (!state.integrations.shareContextWithAi) {
+    return {
+      dailyBrief: `${state.profile.name}, context sharing is off, so today's brief is privacy-limited.`,
+      focusMessage:
+        "Turn on context sharing when you want richer summaries across tasks, notes, reminders, and notifications.",
+      suggestionCards: [
+        "Keep using manual tasks and reminders for now.",
+        "Turn context sharing back on for smarter summaries.",
+        "Review confirmations before approving any meaningful action.",
+      ],
+      notificationSummary: "Notification ranking is privacy-limited while context sharing is off.",
+      rankedNotifications: [...state.notifications],
+    };
+  }
+
   const overdueCount = state.tasks.filter((task) => task.status === "overdue").length;
   const pendingApprovals = state.pendingActions.filter((item) => item.status === "pending").length;
   const activeReminders = state.reminders.filter((item) => item.status === "active").length;

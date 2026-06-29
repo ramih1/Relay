@@ -6,6 +6,7 @@ import type {
   PendingAction,
   Reminder,
   Task,
+  IntegrationState,
   UserPreferences,
   UserProfile,
 } from "@/lib/types";
@@ -30,6 +31,13 @@ const defaultProfile: UserProfile = {
   name: "Rami",
   email: "rami@example.com",
   role: "Student",
+};
+
+const defaultIntegrations: IntegrationState = {
+  calendar: true,
+  emailDrafts: true,
+  callAssistant: true,
+  shareContextWithAi: true,
 };
 
 function cleanText(input: string) {
@@ -333,10 +341,37 @@ function buildClarificationPlan(rawInput: string, preferences: UserPreferences):
   };
 }
 
+function buildIntegrationBlockedPlan(
+  rawInput: string,
+  preferences: UserPreferences,
+  capability: "email drafts" | "call assistant",
+): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+
+  return {
+    feedMessage: withTone(
+      `I held that request because ${capability} is currently disabled in Settings.`,
+      preferences.assistantTone,
+    ),
+    request: {
+      input,
+      outcome: `Blocked by settings because ${capability} is disabled.`,
+      status: "needs_clarification",
+    },
+    event: {
+      title: "Assistant capability blocked by settings",
+      detail: capability,
+      category: "assistant",
+      impact: "warning",
+    },
+  };
+}
+
 export function buildAssistantCommandPlan(
   rawInput: string,
   preferences: UserPreferences = defaultPreferences,
   profile: UserProfile = defaultProfile,
+  integrations: IntegrationState = defaultIntegrations,
 ): AssistantCommandPlan {
   const input = cleanText(rawInput);
   const lower = input.toLowerCase();
@@ -350,10 +385,18 @@ export function buildAssistantCommandPlan(
   }
 
   if (/(draft|write).*\bemail\b/i.test(lower)) {
+    if (!integrations.emailDrafts) {
+      return buildIntegrationBlockedPlan(input, preferences, "email drafts");
+    }
+
     return buildEmailPlan(input, preferences, profile);
   }
 
   if (/\bcall\b/i.test(lower)) {
+    if (!integrations.callAssistant) {
+      return buildIntegrationBlockedPlan(input, preferences, "call assistant");
+    }
+
     return buildCallPlan(input, preferences, profile);
   }
 

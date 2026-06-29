@@ -27,6 +27,13 @@ export type UserProfile = {
   role: string;
 };
 
+export type IntegrationState = {
+  calendar: boolean;
+  emailDrafts: boolean;
+  callAssistant: boolean;
+  shareContextWithAi: boolean;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -143,6 +150,7 @@ export type JarvisStateSnapshot = {
   actionLog: ActionLogEntry[];
   preferences: UserPreferences;
   profile: UserProfile;
+  integrations: IntegrationState;
 };
 
 export type DashboardInsightSnapshot = {
@@ -213,4 +221,5 @@ export type JarvisMutationRequest =
   | { type: "delete_draft"; draftId: string }
   | { type: "create_call_followups"; callId: string }
   | { type: "update_preferences"; updates: Partial<UserPreferences> }
-  | { type: "update_profile"; updates: Partial<UserProfile> };
+  | { type: "update_profile"; updates: Partial<UserProfile> }
+  | { type: "update_integrations"; updates: Partial<IntegrationState> };

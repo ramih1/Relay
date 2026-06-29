@@ -62,6 +62,12 @@ function createInitialState(): JarvisStateSnapshot {
       email: "rami@example.com",
       role: "Student",
     },
+    integrations: {
+      calendar: true,
+      emailDrafts: true,
+      callAssistant: true,
+      shareContextWithAi: true,
+    },
   };
 }
 
@@ -95,6 +101,10 @@ async function loadState(): Promise<JarvisStateSnapshot> {
       profile: {
         ...createInitialState().profile,
         ...parsed.profile,
+      },
+      integrations: {
+        ...createInitialState().integrations,
+        ...parsed.integrations,
       },
     };
   } catch {
@@ -146,7 +156,7 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
   if (!input) {
     return;
   }
-  const plan = buildAssistantCommandPlan(input, state.preferences, state.profile);
+  const plan = buildAssistantCommandPlan(input, state.preferences, state.profile, state.integrations);
 
   if (plan.drafts?.length) {
     state.drafts = [...plan.drafts, ...state.drafts];
@@ -682,6 +692,18 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
       recordEvent(state, {
         title: "Profile updated",
         detail: `${state.profile.name} • ${state.profile.role}`,
+        category: "system",
+        impact: "info",
+      });
+      break;
+    case "update_integrations":
+      state.integrations = {
+        ...state.integrations,
+        ...input.updates,
+      };
+      recordEvent(state, {
+        title: "Integration permissions updated",
+        detail: Object.keys(input.updates).join(", ") || "No fields changed",
         category: "system",
         impact: "info",
       });
