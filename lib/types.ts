@@ -34,6 +34,11 @@ export type IntegrationState = {
   shareContextWithAi: boolean;
 };
 
+export type SessionState = {
+  isAuthenticated: boolean;
+  lastActiveAt?: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -152,6 +157,7 @@ export type JarvisStateSnapshot = {
   preferences: UserPreferences;
   profile: UserProfile;
   integrations: IntegrationState;
+  session: SessionState;
 };
 
 export type DashboardInsightSnapshot = {
@@ -221,6 +227,8 @@ export type JarvisMutationRequest =
   | { type: "save_draft"; draftId: string; updates: Partial<EmailDraft> }
   | { type: "delete_draft"; draftId: string }
   | { type: "create_call_followups"; callId: string }
+  | { type: "sign_in" }
+  | { type: "sign_out" }
   | { type: "update_preferences"; updates: Partial<UserPreferences> }
   | { type: "update_profile"; updates: Partial<UserProfile> }
   | { type: "update_integrations"; updates: Partial<IntegrationState> };

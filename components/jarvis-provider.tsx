@@ -71,7 +71,12 @@ type JarvisStore = {
   preferences: UserPreferences;
   profile: UserProfile;
   integrations: IntegrationState;
+  session: JarvisStateSnapshot["session"];
+  isHydrating: boolean;
+  lastError: string | null;
   submitCommand: (input: string) => Promise<void>;
+  signIn: () => Promise<void>;
+  signOut: () => Promise<void>;
   approveAction: (actionId: string) => Promise<void>;
   cancelAction: (actionId: string) => Promise<void>;
   updatePendingAction: (actionId: string, updates: Partial<PendingAction>) => Promise<void>;
@@ -130,12 +135,17 @@ const fallbackState: JarvisStateSnapshot = {
     callAssistant: true,
     shareContextWithAi: true,
   },
+  session: {
+    isAuthenticated: false,
+  },
 };
 
 const JarvisContext = createContext<JarvisStore | null>(null);
 
 export function JarvisProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<JarvisStateSnapshot>(fallbackState);
+  const [isHydrating, setIsHydrating] = useState(true);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -144,14 +154,23 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       try {
         const response = await fetch("/api/state", { cache: "no-store" });
         if (!response.ok) {
+          if (!cancelled) {
+            setLastError("Failed to load the workspace.");
+            setIsHydrating(false);
+          }
           return;
         }
         const snapshot = (await response.json()) as JarvisStateSnapshot;
         if (!cancelled) {
           setState(snapshot);
+          setLastError(null);
+          setIsHydrating(false);
         }
       } catch {
-        // Keep fallback state if the backend is unavailable.
+        if (!cancelled) {
+          setLastError("JARVIS is using fallback workspace data right now.");
+          setIsHydrating(false);
+        }
       }
     }
 
@@ -170,11 +189,13 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     });
 
     if (!response.ok) {
+      setLastError("Failed to update JARVIS state.");
       throw new Error("Failed to update JARVIS state.");
     }
 
     const snapshot = (await response.json()) as JarvisStateSnapshot;
     setState(snapshot);
+    setLastError(null);
   }
 
   async function submitAssistant(input: string) {
@@ -185,17 +206,23 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     });
 
     if (!response.ok) {
+      setLastError("Failed to process assistant command.");
       throw new Error("Failed to process assistant command.");
     }
 
     const snapshot = (await response.json()) as JarvisStateSnapshot;
     setState(snapshot);
+    setLastError(null);
   }
 
   const value = useMemo<JarvisStore>(
     () => ({
       ...state,
+      isHydrating,
+      lastError,
       submitCommand: submitAssistant,
+      signIn: async () => mutate({ type: "sign_in" }),
+      signOut: async () => mutate({ type: "sign_out" }),
       approveAction: async (actionId) => mutate({ type: "approve_action", actionId }),
       cancelAction: async (actionId) => mutate({ type: "cancel_action", actionId }),
       updatePendingAction: async (actionId, updates) =>
@@ -232,7 +259,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       updateIntegrations: async (updates) => mutate({ type: "update_integrations", updates }),
       resetState: async () => mutate({ type: "reset_state" }),
     }),
-    [state],
+    [state, isHydrating, lastError],
   );
 
   return <JarvisContext.Provider value={value}>{children}</JarvisContext.Provider>;

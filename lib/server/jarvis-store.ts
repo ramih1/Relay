@@ -68,6 +68,9 @@ function createInitialState(): JarvisStateSnapshot {
       callAssistant: true,
       shareContextWithAi: true,
     },
+    session: {
+      isAuthenticated: false,
+    },
   };
 }
 
@@ -105,6 +108,10 @@ async function loadState(): Promise<JarvisStateSnapshot> {
       integrations: {
         ...createInitialState().integrations,
         ...parsed.integrations,
+      },
+      session: {
+        ...createInitialState().session,
+        ...parsed.session,
       },
     };
   } catch {
@@ -360,7 +367,11 @@ export async function getJarvisState(): Promise<JarvisStateSnapshot> {
 }
 
 export async function resetJarvisState() {
-  inMemoryState = createInitialState();
+  const previousSession = (await loadState()).session;
+  inMemoryState = {
+    ...createInitialState(),
+    session: previousSession,
+  };
   await persistState(inMemoryState);
   return getJarvisState();
 }
@@ -371,6 +382,22 @@ export async function submitAssistantCommand(input: string) {
 
 export async function applyJarvisMutation(input: JarvisMutationRequest): Promise<JarvisStateSnapshot> {
   const state = await loadState();
+
+  if (
+    !state.session.isAuthenticated &&
+    input.type !== "sign_in"
+  ) {
+    appendFeed(state, "Sign in to continue using the JARVIS workspace.");
+    recordEvent(state, {
+      title: "Blocked mutation while signed out",
+      detail: input.type,
+      category: "system",
+      impact: "warning",
+    });
+    inMemoryState = state;
+    await persistState(state);
+    return getJarvisState();
+  }
 
   switch (input.type) {
     case "reset_state":
@@ -385,6 +412,30 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
       return getJarvisState();
     case "submit_command":
       submitCommand(state, input.input);
+      break;
+    case "sign_in":
+      state.session = {
+        isAuthenticated: true,
+        lastActiveAt: new Date().toISOString(),
+      };
+      recordEvent(state, {
+        title: "Signed in",
+        detail: `${state.profile.name} entered the workspace`,
+        category: "system",
+        impact: "success",
+      });
+      break;
+    case "sign_out":
+      state.session = {
+        isAuthenticated: false,
+        lastActiveAt: new Date().toISOString(),
+      };
+      recordEvent(state, {
+        title: "Signed out",
+        detail: `${state.profile.name} left the workspace`,
+        category: "system",
+        impact: "warning",
+      });
       break;
     case "approve_action":
       approveAction(state, input.actionId);

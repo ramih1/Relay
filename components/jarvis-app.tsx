@@ -102,7 +102,12 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     preferences,
     profile,
     integrations,
+    session,
+    isHydrating,
+    lastError,
     submitCommand,
+    signIn,
+    signOut,
     approveAction,
     cancelAction,
     updatePendingAction,
@@ -182,6 +187,14 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
         .join("") || "JV",
     [profile.name],
   );
+
+  if (isHydrating) {
+    return <WorkspaceSplash />;
+  }
+
+  if (!session.isAuthenticated) {
+    return <AuthGate profile={profile} lastError={lastError} onSignIn={() => void signIn()} />;
+  }
   const sortedCalendarEvents = useMemo(
     () => [...calendarEvents].sort((left, right) => left.start.localeCompare(right.start)),
     [calendarEvents],
@@ -555,6 +568,14 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       <p className="accent-copy text-sm">{profile.role}</p>
                     </div>
                   </div>
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <p className="copy-soft text-xs uppercase tracking-[0.16em]">
+                      {session.lastActiveAt ? `Active ${formatAuditTime(session.lastActiveAt)}` : "Active now"}
+                    </p>
+                    <button type="button" className="small-action" onClick={() => void signOut()}>
+                      Sign out
+                    </button>
+                  </div>
                 </div>
 
                 <div className="soft-card relative overflow-hidden p-4">
@@ -569,6 +590,11 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
             <section className="relative flex flex-1 flex-col px-5 py-5 lg:px-6">
               <ThemeRail theme={theme} onThemeChange={handleThemeChange} />
+              {lastError ? (
+                <div className="mb-4 rounded-[1rem] border border-[color:color-mix(in_srgb,var(--danger)_32%,transparent_68%)] bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--title)]">
+                  {lastError}
+                </div>
+              ) : null}
               <TopCommandBar command={command} setCommand={setCommand} submitCommand={handleSubmitCommand} />
 
               {section === "dashboard" ? (
@@ -1620,6 +1646,72 @@ function ThemeRail({
         </div>
       </div>
     </div>
+  );
+}
+
+function WorkspaceSplash() {
+  return (
+    <main className="min-h-screen px-5 py-10">
+      <div className="mx-auto flex min-h-[80vh] max-w-6xl items-center justify-center">
+        <div className="hero-panel max-w-2xl text-center">
+          <p className="eyebrow">Booting Workspace</p>
+          <h1 className="title-hero mt-5 font-display text-[3rem] leading-[1.02] sm:text-[4rem]">
+            Bringing JARVIS online.
+          </h1>
+          <p className="copy-strong mt-4 text-lg leading-8">
+            Loading your command center, recent approvals, assistant history, and daily brief.
+          </p>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function AuthGate({
+  profile,
+  lastError,
+  onSignIn,
+}: {
+  profile: { name: string; role: string };
+  lastError: string | null;
+  onSignIn: () => void;
+}) {
+  return (
+    <main className="min-h-screen px-5 py-10">
+      <div className="mx-auto flex min-h-[80vh] max-w-6xl items-center justify-center">
+        <div className="hero-panel max-w-3xl">
+          <p className="eyebrow">Secure Entry</p>
+          <h1 className="title-hero mt-5 max-w-[760px] font-display text-[3rem] leading-[1.02] sm:text-[4.25rem]">
+            Sign in to your JARVIS command center.
+          </h1>
+          <p className="copy-strong mt-4 max-w-[720px] text-lg leading-8">
+            Your approvals, notes, tasks, reminders, drafts, and simulated calls stay organized behind a real workspace entry flow.
+          </p>
+          {lastError ? (
+            <div className="mt-5 rounded-[1rem] border border-[color:color-mix(in_srgb,var(--danger)_32%,transparent_68%)] bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--title)]">
+              {lastError}
+            </div>
+          ) : null}
+          <div className="mt-8 grid gap-4 md:grid-cols-[1.15fr_0.85fr]">
+            <div className="soft-card p-5">
+              <p className="accent-copy text-sm uppercase tracking-[0.18em]">Workspace Promise</p>
+              <ul className="copy-strong mt-4 space-y-3 text-sm leading-7">
+                <li>• Important actions stay approval-first.</li>
+                <li>• Calls stay transparent about what JARVIS can and cannot do.</li>
+                <li>• Settings, permissions, and assistant behavior persist with your workspace.</li>
+              </ul>
+            </div>
+            <div className="soft-card p-5">
+              <p className="title-main text-xl">{profile.name}</p>
+              <p className="copy-soft mt-1 text-sm">{profile.role} workspace</p>
+              <button type="button" className="jarvis-button mt-6 w-full justify-center" onClick={onSignIn}>
+                Continue into JARVIS
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }
 
