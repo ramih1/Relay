@@ -1,8 +1,11 @@
 import type {
   ActionLogEntry,
   AssistantRequestEntry,
+  CalendarEvent,
   CallRequest,
   EmailDraft,
+  NotificationItem,
+  Note,
   PendingAction,
   Reminder,
   Task,
@@ -18,6 +21,14 @@ type AssistantCommandPlan = {
   pendingActions?: PendingAction[];
   drafts?: EmailDraft[];
   calls?: CallRequest[];
+};
+
+type AssistantCommandContext = {
+  latestNote?: Note;
+  upcomingEvents: CalendarEvent[];
+  notifications: NotificationItem[];
+  tasks: Task[];
+  reminders: Reminder[];
 };
 
 const defaultPreferences: UserPreferences = {
@@ -38,6 +49,14 @@ const defaultIntegrations: IntegrationState = {
   emailDrafts: true,
   callAssistant: true,
   shareContextWithAi: true,
+};
+
+const defaultContext: AssistantCommandContext = {
+  latestNote: undefined,
+  upcomingEvents: [],
+  notifications: [],
+  tasks: [],
+  reminders: [],
 };
 
 function cleanText(input: string) {
@@ -100,6 +119,119 @@ function inferPriority(input: string): Task["priority"] | Reminder["priority"] {
   }
 
   return "low";
+}
+
+function buildNoteSummaryPlan(
+  rawInput: string,
+  preferences: UserPreferences,
+  context: AssistantCommandContext,
+): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+  const note = context.latestNote;
+
+  if (!note) {
+    return buildClarificationPlan("There are no notes to summarize yet. Add one first, then ask again.", preferences);
+  }
+
+  const summary = note.summary || note.content.slice(0, 180);
+
+  return {
+    feedMessage: withTone(`Summary for "${note.title}": ${summary}`, preferences.assistantTone),
+    request: {
+      input,
+      outcome: `Summarized the latest note: ${note.title}.`,
+      status: "completed",
+    },
+    event: {
+      title: "Note summary generated",
+      detail: note.title,
+      category: "assistant",
+      impact: "info",
+    },
+  };
+}
+
+function buildNotificationSummaryPlan(
+  rawInput: string,
+  preferences: UserPreferences,
+  context: AssistantCommandContext,
+): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+  const urgent = context.notifications.filter((item) => item.category === "urgent");
+  const important = context.notifications.filter((item) => item.category === "important");
+  const top = [...context.notifications]
+    .sort((left, right) => {
+      const rank: Record<NotificationItem["category"], number> = {
+        urgent: 0,
+        important: 1,
+        later: 2,
+        low: 3,
+      };
+
+      return rank[left.category] - rank[right.category];
+    })
+    .slice(0, 2)
+    .map((item) => item.title);
+
+  const summary =
+    urgent.length > 0
+      ? `${urgent.length} urgent and ${important.length} important notifications need attention. Top items: ${top.join(", ")}.`
+      : important.length > 0
+        ? `${important.length} important notifications are worth checking next. Top items: ${top.join(", ")}.`
+        : "No urgent notifications right now. You can handle the rest later.";
+
+  return {
+    feedMessage: withTone(summary, preferences.assistantTone),
+    request: {
+      input,
+      outcome: "Summarized current notifications.",
+      status: "completed",
+    },
+    event: {
+      title: "Notification summary generated",
+      detail: top.join(", ") || "No urgent notifications",
+      category: "assistant",
+      impact: "info",
+    },
+  };
+}
+
+function buildDayPlanPlan(
+  rawInput: string,
+  preferences: UserPreferences,
+  context: AssistantCommandContext,
+): AssistantCommandPlan {
+  const input = cleanText(rawInput);
+  const nextEvents = context.upcomingEvents.slice(0, 2);
+  const topTask = context.tasks.find((task) => task.status !== "done");
+  const nextReminder = context.reminders.find((reminder) => reminder.status === "active");
+
+  const steps = [
+    nextEvents[0] ? `Anchor around ${nextEvents[0].title} at ${nextEvents[0].start}` : null,
+    topTask ? `Use your first focus block for ${topTask.title}` : null,
+    nextEvents[1] ? `Protect time before ${nextEvents[1].title}` : null,
+    nextReminder ? `Keep ${nextReminder.title} in mind for ${nextReminder.when}` : null,
+  ].filter(Boolean) as string[];
+
+  const plan =
+    steps.length > 0
+      ? `Day plan: ${steps.join(". ")}.`
+      : "Day plan: your schedule looks open, so start with one high-priority task and then queue the next reminder or draft.";
+
+  return {
+    feedMessage: withTone(plan, preferences.assistantTone),
+    request: {
+      input,
+      outcome: "Generated a lightweight day plan from your current workspace.",
+      status: "completed",
+    },
+    event: {
+      title: "Day plan generated",
+      detail: steps[0] ?? "Open schedule",
+      category: "assistant",
+      impact: "info",
+    },
+  };
 }
 
 function buildTaskPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
@@ -457,6 +589,7 @@ export function buildAssistantCommandPlan(
   preferences: UserPreferences = defaultPreferences,
   profile: UserProfile = defaultProfile,
   integrations: IntegrationState = defaultIntegrations,
+  context: AssistantCommandContext = defaultContext,
 ): AssistantCommandPlan {
   const input = cleanText(rawInput);
   const lower = input.toLowerCase();
@@ -487,6 +620,18 @@ export function buildAssistantCommandPlan(
 
   if (/(turn this note into tasks|extract tasks|action items|tasks from note)/i.test(lower)) {
     return buildTaskExtractionPlan(input, preferences);
+  }
+
+  if (/(summarize my notes|summarize my note|summarize notes|note summary)/i.test(lower)) {
+    return buildNoteSummaryPlan(input, preferences, context);
+  }
+
+  if (/(summarize notifications|notification summary|what matters now|summarize alerts)/i.test(lower)) {
+    return buildNotificationSummaryPlan(input, preferences, context);
+  }
+
+  if (/(plan my day|plan today|organize my day|around my .* meeting)/i.test(lower)) {
+    return buildDayPlanPlan(input, preferences, context);
   }
 
   if (/^(add|create|make)\s+(a\s+)?task\b|^task\s*:/i.test(lower)) {

@@ -133,7 +133,7 @@ export type AssistantRequestEntry = {
   id: string;
   input: string;
   outcome: string;
-  status: "queued" | "proposal_created" | "needs_clarification";
+  status: "queued" | "proposal_created" | "completed" | "needs_clarification";
   happenedAt: string;
 };
 

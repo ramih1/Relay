@@ -151,12 +151,28 @@ function updateNote(state: JarvisStateSnapshot, noteId: string, updates: Partial
   state.notes = state.notes.map((note) => (note.id === noteId ? { ...note, ...updates } : note));
 }
 
+function buildAssistantContext(state: JarvisStateSnapshot) {
+  return {
+    latestNote: state.notes[0],
+    upcomingEvents: [...state.calendarEvents].sort((left, right) => left.start.localeCompare(right.start)),
+    notifications: [...state.notifications],
+    tasks: [...state.tasks],
+    reminders: [...state.reminders],
+  };
+}
+
 function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
   const input = rawInput.trim();
   if (!input) {
     return;
   }
-  const plan = buildAssistantCommandPlan(input, state.preferences, state.profile, state.integrations);
+  const plan = buildAssistantCommandPlan(
+    input,
+    state.preferences,
+    state.profile,
+    state.integrations,
+    buildAssistantContext(state),
+  );
 
   if (plan.drafts?.length) {
     state.drafts = [...plan.drafts, ...state.drafts];

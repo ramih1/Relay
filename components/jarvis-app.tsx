@@ -58,6 +58,8 @@ const commandSamples = [
   "Draft an email to my professor asking for an extension",
   "Turn this note into tasks",
   "Call the gym and ask if the basketball court is free tonight",
+  "Plan my day around my 3 PM meeting",
+  "Summarize notifications",
 ];
 
 const mobileNavItems = navItems.slice(0, 5);
@@ -1753,7 +1755,7 @@ function AssistantRequestCard({
   request: {
     input: string;
     outcome: string;
-    status: "queued" | "proposal_created" | "needs_clarification";
+    status: "queued" | "proposal_created" | "completed" | "needs_clarification";
     happenedAt: string;
   };
   compact?: boolean;
@@ -1768,7 +1770,13 @@ function AssistantRequestCard({
         </div>
         <StatusPill
           value={request.status}
-          tone={request.status === "proposal_created" ? "success" : request.status === "needs_clarification" ? "warning" : "neutral"}
+          tone={
+            request.status === "proposal_created" || request.status === "completed"
+              ? "success"
+              : request.status === "needs_clarification"
+                ? "warning"
+                : "neutral"
+          }
         />
       </div>
       <p className="copy-soft mt-3 text-xs uppercase tracking-[0.16em]">{formatAuditTime(request.happenedAt)}</p>
