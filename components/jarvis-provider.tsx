@@ -81,6 +81,7 @@ type JarvisStore = {
   cancelAction: (actionId: string) => Promise<void>;
   updatePendingAction: (actionId: string, updates: Partial<PendingAction>) => Promise<void>;
   addTask: (input: NewTaskInput) => Promise<void>;
+  updateTask: (taskId: string, updates: Partial<Task>) => Promise<void>;
   toggleTask: (taskId: string) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
   addNote: (input: NewNoteInput) => Promise<void>;
@@ -88,6 +89,7 @@ type JarvisStore = {
   deleteNote: (noteId: string) => Promise<void>;
   addReminder: (input: NewReminderInput) => Promise<void>;
   addCalendarEvent: (input: NewCalendarEventInput) => Promise<void>;
+  updateCalendarEvent: (eventId: string, updates: Partial<CalendarEvent>) => Promise<void>;
   deleteCalendarEvent: (eventId: string) => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
   updateNotificationCategory: (notificationId: string, category: NotificationItem["category"]) => Promise<void>;
@@ -228,21 +230,25 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       updatePendingAction: async (actionId, updates) =>
         mutate({ type: "update_pending_action", actionId, updates }),
       addTask: async (input) => mutate({ type: "add_task", input }),
+      updateTask: async (taskId, updates) => mutate({ type: "update_task", taskId, updates }),
       toggleTask: async (taskId) => mutate({ type: "toggle_task", taskId }),
       deleteTask: async (taskId) => mutate({ type: "delete_task", taskId }),
       addNote: async (input) => mutate({ type: "add_note", input }),
       updateNote: async (noteId, updates) => {
-        if (updates.summary) {
+        if (Object.keys(updates).every((key) => key === "summary")) {
           await mutate({ type: "summarize_note", noteId });
           return;
         }
-        if (updates.tags) {
+        if (Object.keys(updates).every((key) => key === "tags")) {
           await mutate({ type: "suggest_note_tags", noteId });
+          return;
         }
+        await mutate({ type: "update_note", noteId, updates });
       },
       deleteNote: async (noteId) => mutate({ type: "delete_note", noteId }),
       addReminder: async (input) => mutate({ type: "add_reminder", input }),
       addCalendarEvent: async (input) => mutate({ type: "add_calendar_event", input }),
+      updateCalendarEvent: async (eventId, updates) => mutate({ type: "update_calendar_event", eventId, updates }),
       deleteCalendarEvent: async (eventId) => mutate({ type: "delete_calendar_event", eventId }),
       markNotificationRead: async (notificationId) => mutate({ type: "mark_notification_read", notificationId }),
       updateNotificationCategory: async (notificationId, category) =>

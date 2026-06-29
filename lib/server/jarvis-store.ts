@@ -482,6 +482,20 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
         }
       }
       break;
+    case "update_task":
+      {
+        const task = state.tasks.find((item) => item.id === input.taskId);
+        state.tasks = state.tasks.map((item) => (item.id === input.taskId ? { ...item, ...input.updates } : item));
+        if (task) {
+          recordEvent(state, {
+            title: "Task updated",
+            detail: task.title,
+            category: "productivity",
+            impact: "info",
+          });
+        }
+      }
+      break;
     case "delete_task":
       {
         const task = state.tasks.find((item) => item.id === input.taskId);
@@ -528,6 +542,20 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
             detail: note.title,
             category: "productivity",
             impact: "warning",
+          });
+        }
+      }
+      break;
+    case "update_note":
+      {
+        const note = state.notes.find((item) => item.id === input.noteId);
+        state.notes = state.notes.map((item) => (item.id === input.noteId ? { ...item, ...input.updates } : item));
+        if (note) {
+          recordEvent(state, {
+            title: "Note updated",
+            detail: note.title,
+            category: "productivity",
+            impact: "info",
           });
         }
       }
@@ -619,6 +647,22 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
         category: "productivity",
         impact: "success",
       });
+      break;
+    case "update_calendar_event":
+      {
+        const event = state.calendarEvents.find((item) => item.id === input.eventId);
+        state.calendarEvents = state.calendarEvents.map((item) =>
+          item.id === input.eventId ? { ...item, ...input.updates } : item,
+        );
+        if (event) {
+          recordEvent(state, {
+            title: "Calendar event updated",
+            detail: event.title,
+            category: "productivity",
+            impact: "info",
+          });
+        }
+      }
       break;
     case "delete_calendar_event":
       {

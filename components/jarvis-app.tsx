@@ -112,12 +112,15 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     cancelAction,
     updatePendingAction,
     addTask,
+    updateTask,
     toggleTask,
     deleteTask,
     addNote,
+    updateNote,
     deleteNote,
     addReminder,
     addCalendarEvent,
+    updateCalendarEvent,
     deleteCalendarEvent,
     markNotificationRead,
     updateNotificationCategory,
@@ -151,7 +154,9 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     location: "",
     tone: "teal" as CalendarEvent["tone"],
   });
+  const [selectedTaskId, setSelectedTaskId] = useState<string>(tasks[0]?.id ?? "");
   const [selectedNoteId, setSelectedNoteId] = useState<string>(notes[0]?.id ?? "");
+  const [selectedCalendarEventId, setSelectedCalendarEventId] = useState<string>(calendarEvents[0]?.id ?? "");
   const [selectedDraftId, setSelectedDraftId] = useState<string>(drafts[0]?.id ?? "");
   const [confirmationTab, setConfirmationTab] = useState<ConfirmationTab>("pending");
   const [theme, setTheme] = useState<ThemeName>("carbon");
@@ -177,6 +182,8 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const pendingCallCount = calls.filter((call) => call.status === "pending").length;
   const notesPreview = notes.find((note) => note.id === selectedNoteId) ?? notes[0];
   const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) ?? drafts[0];
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
+  const selectedCalendarEvent = calendarEvents.find((event) => event.id === selectedCalendarEventId) ?? calendarEvents[0];
   const profileInitials = useMemo(
     () =>
       profile.name
@@ -490,6 +497,24 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   }, [profile.email, profile.name, profile.role]);
 
   useEffect(() => {
+    if (!tasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskId(tasks[0]?.id ?? "");
+    }
+  }, [selectedTaskId, tasks]);
+
+  useEffect(() => {
+    if (!notes.some((note) => note.id === selectedNoteId)) {
+      setSelectedNoteId(notes[0]?.id ?? "");
+    }
+  }, [notes, selectedNoteId]);
+
+  useEffect(() => {
+    if (!calendarEvents.some((event) => event.id === selectedCalendarEventId)) {
+      setSelectedCalendarEventId(calendarEvents[0]?.id ?? "");
+    }
+  }, [calendarEvents, selectedCalendarEventId]);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
@@ -670,11 +695,18 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
 
                   <div className="mt-4 grid gap-4 xl:grid-cols-3">
                     <DashboardPanel title="Priority Tasks" actionLabel="View all" href="/tasks">
-                      <div className="space-y-4">
-                        {tasks.slice(0, 4).map((task) => (
-                          <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => deleteTask(task.id)} />
-                        ))}
-                      </div>
+                        <div className="space-y-4">
+                          {tasks.slice(0, 4).map((task) => (
+                            <TaskRow
+                              key={task.id}
+                              task={task}
+                              active={selectedTask?.id === task.id}
+                              onSelect={() => setSelectedTaskId(task.id)}
+                              onToggle={() => toggleTask(task.id)}
+                              onDelete={() => deleteTask(task.id)}
+                            />
+                          ))}
+                        </div>
                     </DashboardPanel>
 
                     <DashboardPanel title="Confirmations Queue" actionLabel={`View all (${pendingApprovals.length})`} href="/confirmations">
@@ -891,7 +923,14 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       {visibleTasks.length > 0 ? (
                         <div className="space-y-4">
                           {visibleTasks.map((task) => (
-                            <TaskRow key={task.id} task={task} onToggle={() => toggleTask(task.id)} onDelete={() => deleteTask(task.id)} />
+                            <TaskRow
+                              key={task.id}
+                              task={task}
+                              active={selectedTask?.id === task.id}
+                              onSelect={() => setSelectedTaskId(task.id)}
+                              onToggle={() => toggleTask(task.id)}
+                              onDelete={() => deleteTask(task.id)}
+                            />
                           ))}
                         </div>
                       ) : (
@@ -899,12 +938,16 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       )}
                     </DashboardPanel>
                     <DashboardPanel title="Task Snapshot">
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <TaskInsightCard label="Today" value={String(filteredTaskGroups.today.length)} detail="Due or happening today" />
-                        <TaskInsightCard label="Upcoming" value={String(filteredTaskGroups.upcoming.length)} detail="Still ahead of schedule" />
-                        <TaskInsightCard label="Overdue" value={String(filteredTaskGroups.overdue.length)} detail="Worth clearing first" />
-                        <TaskInsightCard label="Completed" value={String(filteredTaskGroups.completed.length)} detail="Already wrapped up" />
-                      </div>
+                      {selectedTask ? (
+                        <TaskEditor task={selectedTask} onSave={updateTask} />
+                      ) : (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <TaskInsightCard label="Today" value={String(filteredTaskGroups.today.length)} detail="Due or happening today" />
+                          <TaskInsightCard label="Upcoming" value={String(filteredTaskGroups.upcoming.length)} detail="Still ahead of schedule" />
+                          <TaskInsightCard label="Overdue" value={String(filteredTaskGroups.overdue.length)} detail="Worth clearing first" />
+                          <TaskInsightCard label="Completed" value={String(filteredTaskGroups.completed.length)} detail="Already wrapped up" />
+                        </div>
+                      )}
                     </DashboardPanel>
                   </div>
                 </SectionPage>
@@ -974,29 +1017,13 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                   <div className="mt-4">
                     <DashboardPanel title={notesPreview?.title ?? "Selected Note"}>
                       {notesPreview ? (
-                        <div className="space-y-5">
-                          <div className="flex flex-wrap gap-2">
-                            {notesPreview.tags.map((tag) => (
-                              <span key={tag} className="rounded-full border border-[color:color-mix(in_srgb,var(--surface-outline)_55%,transparent_45%)] px-3 py-1 text-sm title-soft">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                          <p className="note-surface copy-strong p-5 text-sm leading-8">
-                            {notesPreview.content}
-                          </p>
-                          <div className="grid gap-3 md:grid-cols-3">
-                            <button type="button" className="soft-outline" onClick={() => summarizeNote(notesPreview.id)}>
-                              Summarize
-                            </button>
-                            <button type="button" className="soft-outline" onClick={() => suggestNoteTags(notesPreview.id)}>
-                              Suggest Tags
-                            </button>
-                            <button type="button" className="jarvis-button" onClick={() => submitCommand("Turn this note into tasks")}>
-                              Extract Tasks
-                            </button>
-                          </div>
-                        </div>
+                        <NoteEditor
+                          note={notesPreview}
+                          onSave={updateNote}
+                          onSummarize={summarizeNote}
+                          onSuggestTags={suggestNoteTags}
+                          onExtractTasks={() => submitCommand("Turn this note into tasks")}
+                        />
                       ) : null}
                     </DashboardPanel>
                   </div>
@@ -1261,15 +1288,29 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                                   <p className="mt-1 text-sm text-muted">{item.detail}</p>
                                   {item.location ? <p className="copy-soft mt-2 text-sm">{item.location}</p> : null}
                                 </div>
-                                <button type="button" className="small-action" onClick={() => deleteCalendarEvent(item.id)}>
-                                  Delete
-                                </button>
+                                <div className="flex flex-wrap gap-2">
+                                  <button type="button" className="small-action" onClick={() => setSelectedCalendarEventId(item.id)}>
+                                    Edit
+                                  </button>
+                                  <button type="button" className="small-action" onClick={() => deleteCalendarEvent(item.id)}>
+                                    Delete
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           ))}
                         </div>
                       ) : (
                         <EmptyState title="No calendar events yet" description="Add your first event here and JARVIS will reflect it in the dashboard schedule." />
+                      )}
+                    </DashboardPanel>
+                  </div>
+                  <div className="mt-4">
+                    <DashboardPanel title={selectedCalendarEvent ? `Edit ${selectedCalendarEvent.title}` : "Event Editor"}>
+                      {selectedCalendarEvent ? (
+                        <CalendarEventEditor event={selectedCalendarEvent} onSave={updateCalendarEvent} />
+                      ) : (
+                        <EmptyState title="No event selected" description="Pick an event from today's schedule to edit its time, detail, or location." />
                       )}
                     </DashboardPanel>
                   </div>
@@ -1986,15 +2027,24 @@ function ActivityRow({
 
 function TaskRow({
   task,
+  active,
+  onSelect,
   onToggle,
   onDelete,
 }: {
   task: Task;
+  active?: boolean;
+  onSelect: () => void;
   onToggle: () => void;
   onDelete: () => void;
 }) {
   return (
-    <div className="flex items-start gap-4 border-b border-[color:color-mix(in_srgb,var(--surface-outline)_35%,transparent_65%)] pb-4 last:border-b-0 last:pb-0">
+    <div
+      className={clsx(
+        "flex items-start gap-4 rounded-[1rem] border-b border-[color:color-mix(in_srgb,var(--surface-outline)_35%,transparent_65%)] pb-4 last:border-b-0 last:pb-0",
+        active && "bg-[color:color-mix(in_srgb,var(--accent)_6%,transparent_94%)] px-3 pt-3",
+      )}
+    >
       <button
         type="button"
         onClick={onToggle}
@@ -2009,7 +2059,7 @@ function TaskRow({
       >
         {task.status === "done" ? <Check className="h-4 w-4 text-[var(--bg)]" /> : null}
       </button>
-      <div className="flex-1">
+      <button type="button" className="flex-1 text-left" onClick={onSelect}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className={clsx("text-xl", task.status === "done" ? "text-[var(--accent)]" : "title-main")}>{task.title}</p>
@@ -2026,7 +2076,37 @@ function TaskRow({
             </button>
           </div>
         </div>
-      </div>
+      </button>
+    </div>
+  );
+}
+
+function TaskEditor({
+  task,
+  onSave,
+}: {
+  task: Task;
+  onSave: (taskId: string, updates: Partial<Task>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <input value={task.title} onChange={(e) => onSave(task.id, { title: e.target.value })} className="field-input" />
+      <input value={task.due} onChange={(e) => onSave(task.id, { due: e.target.value })} className="field-input" />
+      <select value={task.priority} onChange={(e) => onSave(task.id, { priority: e.target.value as Task["priority"] })} className="field-input">
+        <option value="low">Low priority</option>
+        <option value="medium">Medium priority</option>
+        <option value="high">High priority</option>
+      </select>
+      <select value={task.status} onChange={(e) => onSave(task.id, { status: e.target.value as Task["status"] })} className="field-input">
+        <option value="pending">Pending</option>
+        <option value="done">Done</option>
+        <option value="overdue">Overdue</option>
+      </select>
+      <textarea
+        value={task.description ?? ""}
+        onChange={(e) => onSave(task.id, { description: e.target.value })}
+        className="field-input min-h-32"
+      />
     </div>
   );
 }
@@ -2061,6 +2141,49 @@ function NotePreviewCard({ note }: { note: Note }) {
             <li key={line}>• {line.trim()}</li>
           ))}
       </ul>
+    </div>
+  );
+}
+
+function NoteEditor({
+  note,
+  onSave,
+  onSummarize,
+  onSuggestTags,
+  onExtractTasks,
+}: {
+  note: Note;
+  onSave: (noteId: string, updates: Partial<Note>) => void;
+  onSummarize: (noteId: string) => void;
+  onSuggestTags: (noteId: string) => void;
+  onExtractTasks: () => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <input value={note.title} onChange={(e) => onSave(note.id, { title: e.target.value })} className="field-input" />
+      <div className="flex flex-wrap gap-2">
+        {note.tags.map((tag) => (
+          <span key={tag} className="rounded-full border border-[color:color-mix(in_srgb,var(--surface-outline)_55%,transparent_45%)] px-3 py-1 text-sm title-soft">
+            {tag}
+          </span>
+        ))}
+      </div>
+      <textarea
+        value={note.content}
+        onChange={(e) => onSave(note.id, { content: e.target.value })}
+        className="field-input min-h-56"
+      />
+      <div className="grid gap-3 md:grid-cols-3">
+        <button type="button" className="soft-outline" onClick={() => onSummarize(note.id)}>
+          Summarize
+        </button>
+        <button type="button" className="soft-outline" onClick={() => onSuggestTags(note.id)}>
+          Suggest Tags
+        </button>
+        <button type="button" className="jarvis-button" onClick={onExtractTasks}>
+          Extract Tasks
+        </button>
+      </div>
     </div>
   );
 }
@@ -2160,6 +2283,29 @@ function DraftEditor({
           Delete Draft
         </button>
       </div>
+    </div>
+  );
+}
+
+function CalendarEventEditor({
+  event,
+  onSave,
+}: {
+  event: CalendarEvent;
+  onSave: (eventId: string, updates: Partial<CalendarEvent>) => void;
+}) {
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <input value={event.title} onChange={(e) => onSave(event.id, { title: e.target.value })} className="field-input md:col-span-2" />
+      <input value={event.start} onChange={(e) => onSave(event.id, { start: e.target.value })} className="field-input" />
+      <input value={event.end} onChange={(e) => onSave(event.id, { end: e.target.value })} className="field-input" />
+      <input value={event.location ?? ""} onChange={(e) => onSave(event.id, { location: e.target.value })} className="field-input" />
+      <select value={event.tone} onChange={(e) => onSave(event.id, { tone: e.target.value as CalendarEvent["tone"] })} className="field-input">
+        <option value="teal">Teal</option>
+        <option value="gold">Gold</option>
+        <option value="rose">Rose</option>
+      </select>
+      <textarea value={event.detail} onChange={(e) => onSave(event.id, { detail: e.target.value })} className="field-input min-h-32 md:col-span-2" />
     </div>
   );
 }

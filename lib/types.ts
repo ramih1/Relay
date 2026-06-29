@@ -184,6 +184,7 @@ export type JarvisMutationRequest =
       };
     }
   | { type: "toggle_task"; taskId: string }
+  | { type: "update_task"; taskId: string; updates: Partial<Task> }
   | { type: "delete_task"; taskId: string }
   | {
       type: "add_note";
@@ -193,6 +194,7 @@ export type JarvisMutationRequest =
       };
     }
   | { type: "delete_note"; noteId: string }
+  | { type: "update_note"; noteId: string; updates: Partial<Note> }
   | { type: "summarize_note"; noteId: string }
   | { type: "suggest_note_tags"; noteId: string }
   | {
@@ -215,6 +217,7 @@ export type JarvisMutationRequest =
         tone: CalendarEvent["tone"];
       };
     }
+  | { type: "update_calendar_event"; eventId: string; updates: Partial<CalendarEvent> }
   | { type: "delete_calendar_event"; eventId: string }
   | { type: "mark_notification_read"; notificationId: string }
   | {
