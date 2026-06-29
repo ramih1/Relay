@@ -57,6 +57,11 @@ function createInitialState(): JarvisStateSnapshot {
       digestStyle: "balanced",
       approvalsLocked: true,
     },
+    profile: {
+      name: "Rami",
+      email: "rami@example.com",
+      role: "Student",
+    },
   };
 }
 
@@ -86,6 +91,10 @@ async function loadState(): Promise<JarvisStateSnapshot> {
       preferences: {
         ...createInitialState().preferences,
         ...parsed.preferences,
+      },
+      profile: {
+        ...createInitialState().profile,
+        ...parsed.profile,
       },
     };
   } catch {
@@ -137,7 +146,7 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
   if (!input) {
     return;
   }
-  const plan = buildAssistantCommandPlan(input, state.preferences);
+  const plan = buildAssistantCommandPlan(input, state.preferences, state.profile);
 
   if (plan.drafts?.length) {
     state.drafts = [...plan.drafts, ...state.drafts];
@@ -220,7 +229,7 @@ function approveAction(state: JarvisStateSnapshot, actionId: string) {
             ...call,
             status: "simulated",
             transcript:
-              "JARVIS: Hi, I'm JARVIS calling on behalf of Rami.\nGym: The court should be free after 7:30 PM.\nJARVIS: Thanks. Is there a closing time?\nGym: We close at 10 PM tonight.\nJARVIS: Perfect, I'll pass that along.",
+              `JARVIS: Hi, I'm JARVIS calling on behalf of ${state.profile.name}.\nGym: The court should be free after 7:30 PM.\nJARVIS: Thanks. Is there a closing time?\nGym: We close at 10 PM tonight.\nJARVIS: Perfect, I'll pass that along to ${state.profile.name}.`,
             summary: "Court is free after 7:30 PM and the gym closes at 10 PM.",
           }
         : call,
@@ -647,6 +656,18 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
       recordEvent(state, {
         title: "Preferences updated",
         detail: Object.keys(input.updates).join(", ") || "No fields changed",
+        category: "system",
+        impact: "info",
+      });
+      break;
+    case "update_profile":
+      state.profile = {
+        ...state.profile,
+        ...input.updates,
+      };
+      recordEvent(state, {
+        title: "Profile updated",
+        detail: `${state.profile.name} • ${state.profile.role}`,
         category: "system",
         impact: "info",
       });

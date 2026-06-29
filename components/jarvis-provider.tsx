@@ -24,6 +24,7 @@ import type {
   Reminder,
   Task,
   UserPreferences,
+  UserProfile,
 } from "@/lib/types";
 
 type NewTaskInput = {
@@ -67,6 +68,7 @@ type JarvisStore = {
   assistantRequests: AssistantRequestEntry[];
   actionLog: ActionLogEntry[];
   preferences: UserPreferences;
+  profile: UserProfile;
   submitCommand: (input: string) => Promise<void>;
   approveAction: (actionId: string) => Promise<void>;
   cancelAction: (actionId: string) => Promise<void>;
@@ -90,6 +92,7 @@ type JarvisStore = {
   suggestNoteTags: (noteId: string) => Promise<void>;
   createCallFollowups: (callId: string) => Promise<void>;
   updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>;
+  updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   resetState: () => Promise<void>;
 };
 
@@ -112,6 +115,11 @@ const fallbackState: JarvisStateSnapshot = {
     assistantTone: "calm",
     digestStyle: "balanced",
     approvalsLocked: true,
+  },
+  profile: {
+    name: "Rami",
+    email: "rami@example.com",
+    role: "Student",
   },
 };
 
@@ -211,6 +219,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       suggestNoteTags: async (noteId) => mutate({ type: "suggest_note_tags", noteId }),
       createCallFollowups: async (callId) => mutate({ type: "create_call_followups", callId }),
       updatePreferences: async (updates) => mutate({ type: "update_preferences", updates }),
+      updateProfile: async (updates) => mutate({ type: "update_profile", updates }),
       resetState: async () => mutate({ type: "reset_state" }),
     }),
     [state],

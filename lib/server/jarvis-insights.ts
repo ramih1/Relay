@@ -34,9 +34,9 @@ export async function getDashboardInsights(): Promise<DashboardInsightSnapshot> 
   const dailyBrief =
     state.preferences.digestStyle === "brief"
       ? briefParts.length > 0
-        ? `Today: ${briefParts.slice(0, 3).join(", ")}.`
-        : "Today is clear."
-      : detailedBrief;
+        ? `${state.profile.name}, today: ${briefParts.slice(0, 3).join(", ")}.`
+        : `${state.profile.name}, today is clear.`
+      : `${state.profile.name}, ${detailedBrief.charAt(0).toLowerCase()}${detailedBrief.slice(1)}`;
 
   const focusMessage =
     overdueCount > 0

@@ -98,6 +98,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     assistantRequests,
     actionLog,
     preferences,
+    profile,
     submitCommand,
     approveAction,
     cancelAction,
@@ -120,6 +121,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     suggestNoteTags,
     createCallFollowups,
     updatePreferences,
+    updateProfile,
     resetState,
   } = useJarvis();
 
@@ -151,6 +153,11 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const [reminderFilter, setReminderFilter] = useState<ReminderFilter>("all");
   const [reminderQuery, setReminderQuery] = useState("");
   const [insights, setInsights] = useState<DashboardInsightSnapshot | null>(null);
+  const [profileDraft, setProfileDraft] = useState({
+    name: profile.name,
+    email: profile.email,
+    role: profile.role,
+  });
 
   const pendingApprovals = pendingActions.filter((item) => item.status === "pending");
   const pendingCount = pendingApprovals.length;
@@ -161,6 +168,16 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const pendingCallCount = calls.filter((call) => call.status === "pending").length;
   const notesPreview = notes.find((note) => note.id === selectedNoteId) ?? notes[0];
   const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) ?? drafts[0];
+  const profileInitials = useMemo(
+    () =>
+      profile.name
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join("") || "JV",
+    [profile.name],
+  );
   const sortedCalendarEvents = useMemo(
     () => [...calendarEvents].sort((left, right) => left.start.localeCompare(right.start)),
     [calendarEvents],
@@ -448,12 +465,24 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   }, [preferences.theme]);
 
   useEffect(() => {
+    setProfileDraft({
+      name: profile.name,
+      email: profile.email,
+      role: profile.role,
+    });
+  }, [profile.email, profile.name, profile.role]);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
   function handleThemeChange(nextTheme: ThemeName) {
     setTheme(nextTheme);
     void updatePreferences({ theme: nextTheme });
+  }
+
+  function handleSaveProfile() {
+    void updateProfile(profileDraft);
   }
 
   useEffect(() => {
@@ -516,10 +545,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               <div className="mt-auto space-y-4">
                 <div className="soft-card p-4">
                   <div className="flex items-center gap-3">
-                    <div className="avatar-chip">RH</div>
+                    <div className="avatar-chip">{profileInitials}</div>
                     <div>
-                      <p className="title-main text-sm font-medium">Rami Hassan</p>
-                      <p className="accent-copy text-sm">Pro Plan</p>
+                      <p className="title-main text-sm font-medium">{profile.name}</p>
+                      <p className="accent-copy text-sm">{profile.role}</p>
                     </div>
                   </div>
                 </div>
@@ -546,7 +575,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <div>
                           <p className="eyebrow">Today Brief</p>
                           <h1 className="title-hero mt-5 font-display text-[3rem] leading-[1.02] sm:text-[4rem]">
-                            Good morning, Rami.
+                            Good morning, {profile.name}.
                           </h1>
                           <p className="copy-strong mt-4 max-w-[620px] text-xl leading-9">{insights?.dailyBrief ?? fallbackBrief}</p>
                         </div>
@@ -1295,6 +1324,34 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               {section === "settings" ? (
                 <SectionPage eyebrow="Settings" title="Preferences and future integrations." description="This area is moving from demo controls toward real persisted user preferences and integration consent.">
                   <div className="grid gap-4 md:grid-cols-2">
+                    <DashboardPanel title="Profile">
+                      <div className="grid gap-3">
+                        <input
+                          value={profileDraft.name}
+                          onChange={(e) => setProfileDraft((current) => ({ ...current, name: e.target.value }))}
+                          placeholder="Your name"
+                          className="field-input"
+                        />
+                        <input
+                          value={profileDraft.email}
+                          onChange={(e) => setProfileDraft((current) => ({ ...current, email: e.target.value }))}
+                          placeholder="Email address"
+                          className="field-input"
+                        />
+                        <input
+                          value={profileDraft.role}
+                          onChange={(e) => setProfileDraft((current) => ({ ...current, role: e.target.value }))}
+                          placeholder="Role, like Student or Intern"
+                          className="field-input"
+                        />
+                        <p className="copy-soft text-sm leading-7">
+                          JARVIS uses this profile to personalize call scripts, email sign-offs, and the daily brief without changing the approval-first workflow.
+                        </p>
+                        <button type="button" className="jarvis-button" onClick={handleSaveProfile}>
+                          Save Profile
+                        </button>
+                      </div>
+                    </DashboardPanel>
                     <DashboardPanel title="Assistant Preferences">
                       <div className="space-y-5">
                         <div>

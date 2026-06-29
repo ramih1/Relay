@@ -7,6 +7,7 @@ import type {
   Reminder,
   Task,
   UserPreferences,
+  UserProfile,
 } from "@/lib/types";
 
 type AssistantCommandPlan = {
@@ -23,6 +24,12 @@ const defaultPreferences: UserPreferences = {
   assistantTone: "calm",
   digestStyle: "balanced",
   approvalsLocked: true,
+};
+
+const defaultProfile: UserProfile = {
+  name: "Rami",
+  email: "rami@example.com",
+  role: "Student",
 };
 
 function cleanText(input: string) {
@@ -140,29 +147,33 @@ function extractRecipient(input: string) {
   return titleCase(match[1].replace(/\bmy\b/gi, "").trim()) || "Recipient to be confirmed";
 }
 
-function buildExtensionEmail(recipient: string) {
+function buildExtensionEmail(recipient: string, profile: UserProfile) {
   return {
     subject: "Request for a Short Extension",
     body:
       `Hi ${recipient === "Recipient to be confirmed" ? "" : recipient},\n\n` +
       "I hope you're doing well. I wanted to ask whether a short extension would be possible for my assignment. " +
       "I've been making steady progress and would appreciate a little more time to submit my best work.\n\n" +
-      "Thank you for considering it.\n\nBest,\nRami",
+      `Thank you for considering it.\n\nBest,\n${profile.name}`,
   };
 }
 
-function buildEmailPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
+function buildEmailPlan(
+  rawInput: string,
+  preferences: UserPreferences,
+  profile: UserProfile,
+): AssistantCommandPlan {
   const input = cleanText(rawInput);
   const recipient = extractRecipient(input);
   const isExtension = /extension|extend/i.test(input);
   const draftId = crypto.randomUUID();
   const email = isExtension
-    ? buildExtensionEmail(recipient)
+    ? buildExtensionEmail(recipient, profile)
     : {
         subject: "Follow-up",
         body:
           `Hi ${recipient === "Recipient to be confirmed" ? "" : recipient},\n\n` +
-          "I wanted to follow up and share a quick note. Let me know if this works for you.\n\nBest,\nRami",
+          `I wanted to follow up and share a quick note. Let me know if this works for you.\n\nBest,\n${profile.name}`,
       };
 
   const draft: EmailDraft = {
@@ -207,7 +218,11 @@ function inferCallContact(input: string) {
   return titleCase(match?.[1]?.trim() || "Campus Gym");
 }
 
-function buildCallPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
+function buildCallPlan(
+  rawInput: string,
+  preferences: UserPreferences,
+  profile: UserProfile,
+): AssistantCommandPlan {
   const input = cleanText(rawInput);
   const contactName = inferCallContact(input);
   const purposeMatch = input.match(/\bask\s+if\s+(.+)$/i);
@@ -221,7 +236,7 @@ function buildCallPlan(rawInput: string, preferences: UserPreferences): Assistan
     contactName,
     phoneNumber: "(555) 210-1184",
     purpose,
-    script: `Hi, I'm JARVIS, an AI assistant calling on behalf of Rami. I'm calling ${contactName} to ${purpose.toLowerCase()}.`,
+    script: `Hi, I'm JARVIS, an AI assistant calling on behalf of ${profile.name}, a ${profile.role.toLowerCase()}. I'm calling ${contactName} to ${purpose.toLowerCase()}.`,
     allowedActions: ["Ask clarifying questions", "Confirm availability", "Ask operating hours"],
     restrictedActions: ["Do not book anything", "Do not share private details"],
     status: "pending",
@@ -321,6 +336,7 @@ function buildClarificationPlan(rawInput: string, preferences: UserPreferences):
 export function buildAssistantCommandPlan(
   rawInput: string,
   preferences: UserPreferences = defaultPreferences,
+  profile: UserProfile = defaultProfile,
 ): AssistantCommandPlan {
   const input = cleanText(rawInput);
   const lower = input.toLowerCase();
@@ -334,11 +350,11 @@ export function buildAssistantCommandPlan(
   }
 
   if (/(draft|write).*\bemail\b/i.test(lower)) {
-    return buildEmailPlan(input, preferences);
+    return buildEmailPlan(input, preferences, profile);
   }
 
   if (/\bcall\b/i.test(lower)) {
-    return buildCallPlan(input, preferences);
+    return buildCallPlan(input, preferences, profile);
   }
 
   if (/(turn this note into tasks|extract tasks|action items|tasks from note)/i.test(lower)) {

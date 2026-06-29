@@ -21,6 +21,12 @@ export type UserPreferences = {
   approvalsLocked: boolean;
 };
 
+export type UserProfile = {
+  name: string;
+  email: string;
+  role: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -136,6 +142,7 @@ export type JarvisStateSnapshot = {
   assistantRequests: AssistantRequestEntry[];
   actionLog: ActionLogEntry[];
   preferences: UserPreferences;
+  profile: UserProfile;
 };
 
 export type DashboardInsightSnapshot = {
@@ -205,4 +212,5 @@ export type JarvisMutationRequest =
   | { type: "save_draft"; draftId: string; updates: Partial<EmailDraft> }
   | { type: "delete_draft"; draftId: string }
   | { type: "create_call_followups"; callId: string }
-  | { type: "update_preferences"; updates: Partial<UserPreferences> };
+  | { type: "update_preferences"; updates: Partial<UserPreferences> }
+  | { type: "update_profile"; updates: Partial<UserProfile> };
