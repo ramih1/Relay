@@ -400,16 +400,27 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
   }
 
   switch (input.type) {
-    case "reset_state":
-      inMemoryState = createInitialState();
+    case "reset_state": {
+      const preserved = {
+        preferences: state.preferences,
+        profile: state.profile,
+        integrations: state.integrations,
+        session: state.session,
+      };
+
+      inMemoryState = {
+        ...createInitialState(),
+        ...preserved,
+      };
       recordEvent(inMemoryState, {
         title: "Demo workspace restored",
-        detail: "Reset tasks, reminders, notes, and approval items to the starter dataset.",
+        detail: "Reset the demo data while keeping the signed-in workspace settings and identity.",
         category: "system",
         impact: "warning",
       });
       await persistState(inMemoryState);
       return getJarvisState();
+    }
     case "submit_command":
       submitCommand(state, input.input);
       break;

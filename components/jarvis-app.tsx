@@ -86,6 +86,14 @@ type ReminderFilter = (typeof reminderFilterOptions)[number];
 const assistantToneOptions = ["calm", "friendly", "formal"] as const;
 const digestStyleOptions = ["balanced", "brief"] as const;
 
+type QuickAction = {
+  label: string;
+  detail: string;
+  href: string;
+  disabled?: boolean;
+  onClick: () => void;
+};
+
 export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const {
     tasks,
@@ -167,6 +175,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const [reminderFilter, setReminderFilter] = useState<ReminderFilter>("all");
   const [reminderQuery, setReminderQuery] = useState("");
   const [insights, setInsights] = useState<DashboardInsightSnapshot | null>(null);
+  const [isRefreshingInsights, setIsRefreshingInsights] = useState(false);
   const [profileDraft, setProfileDraft] = useState({
     name: profile.name,
     email: profile.email,
@@ -194,14 +203,6 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
         .join("") || "JV",
     [profile.name],
   );
-
-  if (isHydrating) {
-    return <WorkspaceSplash />;
-  }
-
-  if (!session.isAuthenticated) {
-    return <AuthGate profile={profile} lastError={lastError} onSignIn={() => void signIn()} />;
-  }
   const sortedCalendarEvents = useMemo(
     () => [...calendarEvents].sort((left, right) => left.start.localeCompare(right.start)),
     [calendarEvents],
@@ -457,7 +458,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
   const canCreateCalendarEvent =
     calendarForm.title.trim().length > 0 && calendarForm.start.trim().length > 0 && calendarForm.end.trim().length > 0;
 
-  const quickActions = [
+  const quickActions: QuickAction[] = [
     {
       label: "New task",
       detail: "Add something manually",
@@ -466,19 +467,21 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     },
     {
       label: "Draft email",
-      detail: "Queue a message for approval",
+      detail: integrations.emailDrafts ? "Queue a message for approval" : "Enable email drafting in Settings first",
+      disabled: !integrations.emailDrafts,
       onClick: () => {
         setCommand("Draft an email to my professor asking for an extension");
-        submitCommand("Draft an email to my professor asking for an extension");
+        void submitCommand("Draft an email to my professor asking for an extension");
       },
       href: "/assistant",
     },
     {
       label: "Plan a call",
-      detail: "Prepare a transparent call script",
+      detail: integrations.callAssistant ? "Prepare a transparent call script" : "Enable call assistant access in Settings first",
+      disabled: !integrations.callAssistant,
       onClick: () => {
         setCommand("Call the gym and ask if the basketball court is free tonight");
-        submitCommand("Call the gym and ask if the basketball court is free tonight");
+        void submitCommand("Call the gym and ask if the basketball court is free tonight");
       },
       href: "/calls",
     },
@@ -527,11 +530,30 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     void updateProfile(profileDraft);
   }
 
+  async function refreshInsights() {
+    setIsRefreshingInsights(true);
+
+    try {
+      const response = await fetch("/api/insights", { cache: "no-store" });
+      if (!response.ok) {
+        return;
+      }
+
+      const next = (await response.json()) as DashboardInsightSnapshot;
+      setInsights(next);
+    } catch {
+      // Keep fallback content if the backend insights route is unavailable.
+    } finally {
+      setIsRefreshingInsights(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
     async function loadInsights() {
       try {
+        setIsRefreshingInsights(true);
         const response = await fetch("/api/insights", { cache: "no-store" });
         if (!response.ok) {
           return;
@@ -542,6 +564,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
         }
       } catch {
         // Keep fallback content if the backend insights route is unavailable.
+      } finally {
+        if (!cancelled) {
+          setIsRefreshingInsights(false);
+        }
       }
     }
 
@@ -551,6 +577,14 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
       cancelled = true;
     };
   }, [assistantFeed.length, pendingActions.length, reminders.length, tasks.length, drafts.length, calls.length]);
+
+  if (isHydrating) {
+    return <WorkspaceSplash />;
+  }
+
+  if (!session.isAuthenticated) {
+    return <AuthGate profile={profile} lastError={lastError} onSignIn={() => void signIn()} />;
+  }
 
   return (
     <main className="min-h-screen bg-bg pb-24 text-text lg:pb-0">
@@ -634,8 +668,13 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           </h1>
                           <p className="copy-strong mt-4 max-w-[620px] text-xl leading-9">{insights?.dailyBrief ?? fallbackBrief}</p>
                         </div>
-                        <button type="button" className="soft-outline hidden lg:inline-flex">
-                          Generate again
+                        <button
+                          type="button"
+                          className="soft-outline hidden lg:inline-flex"
+                          onClick={() => void refreshInsights()}
+                          disabled={isRefreshingInsights}
+                        >
+                          {isRefreshingInsights ? "Refreshing brief..." : "Refresh brief"}
                         </button>
                       </div>
 
@@ -807,8 +846,21 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           <Link
                             key={action.label}
                             href={action.href}
-                            onClick={action.onClick}
-                            className="app-card px-4 py-4 transition hover:border-[color:color-mix(in_srgb,var(--accent)_30%,transparent_70%)] hover:bg-[color:color-mix(in_srgb,var(--accent)_6%,transparent_94%)]"
+                            onClick={(event) => {
+                              if (action.disabled) {
+                                event.preventDefault();
+                                return;
+                              }
+
+                              action.onClick();
+                            }}
+                            aria-disabled={action.disabled}
+                            className={clsx(
+                              "app-card px-4 py-4 transition",
+                              action.disabled
+                                ? "cursor-not-allowed opacity-55"
+                                : "hover:border-[color:color-mix(in_srgb,var(--accent)_30%,transparent_70%)] hover:bg-[color:color-mix(in_srgb,var(--accent)_6%,transparent_94%)]",
+                            )}
                           >
                             <p className="title-main text-lg">{action.label}</p>
                             <p className="copy-soft mt-2 text-sm leading-6">{action.detail}</p>
@@ -2400,7 +2452,7 @@ function EditableConfirmationCard({
             <StatusPill value={action.risk} tone={action.risk === "high" ? "danger" : action.risk === "medium" ? "warning" : "success"} />
           </div>
 
-          {action.type === "create_reminder" ? (
+          {action.type === "create_reminder" || action.type === "create_followup_task" ? (
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <input value={String(action.payload.title ?? "")} onChange={(e) => onChange(action.id, { payload: { title: e.target.value } })} placeholder="Reminder title" className="field-input" />
               <input value={String(action.payload.when ?? "")} onChange={(e) => onChange(action.id, { payload: { when: e.target.value } })} placeholder="When" className="field-input" />
@@ -2438,6 +2490,18 @@ function EditableConfirmationCard({
               <input value={String(action.payload.end ?? "")} onChange={(e) => onChange(action.id, { payload: { end: e.target.value } })} placeholder="End" className="field-input" />
               <input value={String(action.payload.location ?? "")} onChange={(e) => onChange(action.id, { payload: { location: e.target.value } })} placeholder="Location" className="field-input" />
             </div>
+          ) : null}
+
+          {action.type === "draft_email" ? (
+            <p className="copy-soft mt-3 text-sm leading-7">
+              Approving this marks the prepared draft as ready in the assistant workspace. You can still open the draft and edit the recipient, subject, or message body afterward.
+            </p>
+          ) : null}
+
+          {action.type === "place_call" ? (
+            <p className="copy-soft mt-3 text-sm leading-7">
+              Approving this runs the simulated call flow using the current call plan and saves the transcript plus summary to the Calls page.
+            </p>
           ) : null}
 
           <div className="mt-4 flex gap-2">
