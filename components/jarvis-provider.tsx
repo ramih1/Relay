@@ -24,6 +24,7 @@ import type {
   Reminder,
   Task,
   IntegrationState,
+  RuntimeStatus,
   UserPreferences,
   UserProfile,
 } from "@/lib/types";
@@ -71,6 +72,7 @@ type JarvisStore = {
   preferences: UserPreferences;
   profile: UserProfile;
   integrations: IntegrationState;
+  runtime: RuntimeStatus;
   session: JarvisStateSnapshot["session"];
   isHydrating: boolean;
   lastError: string | null;
@@ -139,6 +141,11 @@ const fallbackState: JarvisStateSnapshot = {
   },
   session: {
     isAuthenticated: false,
+  },
+  runtime: {
+    storageMode: "file",
+    databaseConfigured: Boolean(process.env.NEXT_PUBLIC_DATABASE_CONFIGURED),
+    openAiConfigured: Boolean(process.env.NEXT_PUBLIC_OPENAI_CONFIGURED),
   },
 };
 

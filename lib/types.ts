@@ -39,6 +39,12 @@ export type SessionState = {
   lastActiveAt?: string;
 };
 
+export type RuntimeStatus = {
+  storageMode: "file";
+  databaseConfigured: boolean;
+  openAiConfigured: boolean;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -158,6 +164,7 @@ export type JarvisStateSnapshot = {
   profile: UserProfile;
   integrations: IntegrationState;
   session: SessionState;
+  runtime: RuntimeStatus;
 };
 
 export type DashboardInsightSnapshot = {

@@ -21,11 +21,20 @@ import type {
   Note,
   PendingAction,
   Reminder,
+  RuntimeStatus,
   Task,
 } from "@/lib/types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const STATE_FILE = path.join(DATA_DIR, "jarvis-state.json");
+
+function getRuntimeStatus(): RuntimeStatus {
+  return {
+    storageMode: "file",
+    databaseConfigured: Boolean(process.env.DATABASE_URL),
+    openAiConfigured: Boolean(process.env.OPENAI_API_KEY),
+  };
+}
 
 function createInitialState(): JarvisStateSnapshot {
   return {
@@ -71,6 +80,7 @@ function createInitialState(): JarvisStateSnapshot {
     session: {
       isAuthenticated: false,
     },
+    runtime: getRuntimeStatus(),
   };
 }
 
@@ -113,6 +123,7 @@ async function loadState(): Promise<JarvisStateSnapshot> {
         ...createInitialState().session,
         ...parsed.session,
       },
+      runtime: getRuntimeStatus(),
     };
   } catch {
     inMemoryState = createInitialState();

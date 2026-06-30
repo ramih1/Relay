@@ -111,6 +111,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     profile,
     integrations,
     session,
+    runtime,
     isHydrating,
     lastError,
     submitCommand,
@@ -1623,6 +1624,34 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <li>• Gmail or Outlook drafts and send approvals</li>
                         <li>• Real outbound calls with policy-safe confirmation</li>
                       </ul>
+                    </DashboardPanel>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <DashboardPanel title="Runtime Status">
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <TaskInsightCard label="Storage" value={runtime.storageMode} detail="Current persistence mode" />
+                        <TaskInsightCard
+                          label="Database"
+                          value={runtime.databaseConfigured ? "configured" : "pending"}
+                          detail={runtime.databaseConfigured ? "DATABASE_URL found" : "Add DATABASE_URL to connect Postgres"}
+                        />
+                        <TaskInsightCard
+                          label="OpenAI"
+                          value={runtime.openAiConfigured ? "configured" : "pending"}
+                          detail={runtime.openAiConfigured ? "OPENAI_API_KEY found" : "Optional for future provider wiring"}
+                        />
+                      </div>
+                      <p className="copy-soft mt-4 text-sm leading-7">
+                        The current MVP works immediately with file-backed state, so you can try the full dashboard and approval workflow before connecting a real database.
+                      </p>
+                    </DashboardPanel>
+                    <DashboardPanel title="Getting Started">
+                      <ol className="copy-strong space-y-3 text-sm leading-7">
+                        <li>1. Copy `.env.example` to `.env.local`.</li>
+                        <li>2. Run `pnpm install` and then `pnpm dev`.</li>
+                        <li>3. Open `http://localhost:3000`, sign in, and test commands from the assistant bar.</li>
+                        <li>4. Add `DATABASE_URL` later when you want Postgres wired in.</li>
+                      </ol>
                     </DashboardPanel>
                   </div>
                   <div className="mt-4 grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
