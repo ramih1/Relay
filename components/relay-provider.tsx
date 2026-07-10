@@ -16,8 +16,8 @@ import type {
   AssistantRequestEntry,
   CalendarEvent,
   EmailDraft,
-  JarvisMutationRequest,
-  JarvisStateSnapshot,
+  RelayMutationRequest,
+  RelayStateSnapshot,
   Note,
   NotificationItem,
   PendingAction,
@@ -57,14 +57,14 @@ type NewCalendarEventInput = {
   tone: CalendarEvent["tone"];
 };
 
-type JarvisStore = {
+type RelayStore = {
   tasks: Task[];
   notes: Note[];
   reminders: Reminder[];
   calendarEvents: CalendarEvent[];
   notifications: NotificationItem[];
   drafts: EmailDraft[];
-  calls: JarvisStateSnapshot["calls"];
+  calls: RelayStateSnapshot["calls"];
   pendingActions: PendingAction[];
   assistantFeed: string[];
   assistantRequests: AssistantRequestEntry[];
@@ -73,7 +73,7 @@ type JarvisStore = {
   profile: UserProfile;
   integrations: IntegrationState;
   runtime: RuntimeStatus;
-  session: JarvisStateSnapshot["session"];
+  session: RelayStateSnapshot["session"];
   isHydrating: boolean;
   lastError: string | null;
   submitCommand: (input: string) => Promise<void>;
@@ -108,7 +108,7 @@ type JarvisStore = {
   resetState: () => Promise<void>;
 };
 
-const fallbackState: JarvisStateSnapshot = {
+const fallbackState: RelayStateSnapshot = {
   tasks: initialTasks,
   notes: initialNotes,
   reminders: initialReminders,
@@ -146,13 +146,16 @@ const fallbackState: JarvisStateSnapshot = {
     storageMode: "file",
     databaseConfigured: Boolean(process.env.NEXT_PUBLIC_DATABASE_CONFIGURED),
     openAiConfigured: Boolean(process.env.NEXT_PUBLIC_OPENAI_CONFIGURED),
+    googleOAuthConfigured: Boolean(process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CONFIGURED),
+    gmailConfigured: Boolean(process.env.NEXT_PUBLIC_GMAIL_CONFIGURED),
+    calendarConfigured: Boolean(process.env.NEXT_PUBLIC_CALENDAR_CONFIGURED),
   },
 };
 
-const JarvisContext = createContext<JarvisStore | null>(null);
+const RelayContext = createContext<RelayStore | null>(null);
 
-export function JarvisProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<JarvisStateSnapshot>(fallbackState);
+export function RelayProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<RelayStateSnapshot>(fallbackState);
   const [isHydrating, setIsHydrating] = useState(true);
   const [lastError, setLastError] = useState<string | null>(null);
 
@@ -169,7 +172,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
           }
           return;
         }
-        const snapshot = (await response.json()) as JarvisStateSnapshot;
+        const snapshot = (await response.json()) as RelayStateSnapshot;
         if (!cancelled) {
           setState(snapshot);
           setLastError(null);
@@ -177,7 +180,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
         }
       } catch {
         if (!cancelled) {
-          setLastError("JARVIS is using fallback workspace data right now.");
+          setLastError("Relay is using fallback workspace data right now.");
           setIsHydrating(false);
         }
       }
@@ -190,7 +193,7 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  async function mutate(payload: JarvisMutationRequest) {
+  async function mutate(payload: RelayMutationRequest) {
     const response = await fetch("/api/state", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -198,11 +201,11 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     });
 
     if (!response.ok) {
-      setLastError("Failed to update JARVIS state.");
-      throw new Error("Failed to update JARVIS state.");
+      setLastError("Failed to update Relay state.");
+      throw new Error("Failed to update Relay state.");
     }
 
-    const snapshot = (await response.json()) as JarvisStateSnapshot;
+    const snapshot = (await response.json()) as RelayStateSnapshot;
     setState(snapshot);
     setLastError(null);
   }
@@ -219,12 +222,12 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
       throw new Error("Failed to process assistant command.");
     }
 
-    const snapshot = (await response.json()) as JarvisStateSnapshot;
+    const snapshot = (await response.json()) as RelayStateSnapshot;
     setState(snapshot);
     setLastError(null);
   }
 
-  const value = useMemo<JarvisStore>(
+  const value = useMemo<RelayStore>(
     () => ({
       ...state,
       isHydrating,
@@ -275,13 +278,13 @@ export function JarvisProvider({ children }: { children: ReactNode }) {
     [state, isHydrating, lastError],
   );
 
-  return <JarvisContext.Provider value={value}>{children}</JarvisContext.Provider>;
+  return <RelayContext.Provider value={value}>{children}</RelayContext.Provider>;
 }
 
-export function useJarvis() {
-  const context = useContext(JarvisContext);
+export function useRelay() {
+  const context = useContext(RelayContext);
   if (!context) {
-    throw new Error("useJarvis must be used inside JarvisProvider");
+    throw new Error("useRelay must be used inside RelayProvider");
   }
   return context;
 }

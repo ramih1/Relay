@@ -38,7 +38,7 @@ import type {
   Task,
   ThemeName,
 } from "@/lib/types";
-import { useJarvis } from "@/components/jarvis-provider";
+import { useRelay } from "@/components/relay-provider";
 
 const navItems: { key: NavKey; label: string; href: string; icon: ComponentType<{ className?: string }> }[] = [
   { key: "dashboard", label: "Dashboard", href: "/", icon: Home },
@@ -94,7 +94,7 @@ type QuickAction = {
   onClick: () => void;
 };
 
-export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
+export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
   const {
     tasks,
     notes,
@@ -144,7 +144,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
     updateProfile,
     updateIntegrations,
     resetState,
-  } = useJarvis();
+  } = useRelay();
 
   const [command, setCommand] = useState("");
   const [taskForm, setTaskForm] = useState({ title: "", due: "", priority: "medium" as Task["priority"], description: "" });
@@ -294,7 +294,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
       lines.push(`${activeReminderCount} active reminder${activeReminderCount === 1 ? "" : "s"} are scheduled`);
     }
     if (lines.length === 0) {
-      return "Your workspace looks clear right now. Good time to plan ahead or ask JARVIS to prepare your next move.";
+      return "Your workspace looks clear right now. Good time to plan ahead or ask Relay to prepare your next move.";
     }
 
     const first = lines[0];
@@ -369,7 +369,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
       return "Start by clearing the overdue work so the rest of the day feels lighter.";
     }
     if (pendingCount > 0) {
-      return "Your approval queue is the highest leverage place to unblock JARVIS.";
+      return "Your approval queue is the highest leverage place to unblock Relay.";
     }
     if (highPriorityTasks.length > 0) {
       return "You already know the high-priority tasks. A short focus block would move today forward.";
@@ -592,10 +592,10 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(86,211,208,0.08),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(226,190,125,0.07),_transparent_16%),radial-gradient(circle_at_center,_rgba(255,255,255,0.02),_transparent_28%)]" />
         <div className="mx-auto max-w-[1560px] px-4 py-4 sm:px-6 lg:px-8">
-          <div className="jarvis-shell flex min-h-[calc(100vh-2rem)] flex-col overflow-hidden lg:flex-row">
+          <div className="relay-shell flex min-h-[calc(100vh-2rem)] flex-col overflow-hidden lg:flex-row">
             <aside className="flex w-full shrink-0 flex-col border-b border-white/6 px-5 py-6 lg:w-[276px] lg:border-b-0 lg:border-r lg:px-4">
               <div className="flex items-start justify-between">
-                <JarvisBrand />
+                <RelayBrand />
                 <button type="button" className="icon-chip mt-2 hidden lg:inline-flex">
                   <ChevronRight className="h-4 w-4 rotate-180" />
                 </button>
@@ -641,7 +641,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                 <div className="soft-card relative overflow-hidden p-4">
                   <div className="accent-orb absolute left-4 top-5 h-14 w-14 rounded-full border border-[color:color-mix(in_srgb,var(--accent)_32%,transparent_68%)] blur-[2px]" />
                   <div className="relative pl-16">
-                    <p className="title-soft text-lg">JARVIS Online</p>
+                    <p className="title-soft text-lg">Relay Online</p>
                     <p className="mt-1 text-sm text-muted">Synced across pages.</p>
                   </div>
                 </div>
@@ -803,7 +803,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           </Link>
                           <button
                             type="button"
-                            className="jarvis-button"
+                            className="relay-button"
                             onClick={() => {
                               const pendingCall = pendingApprovals.find((action) => action.type === "place_call");
                               if (pendingCall) {
@@ -887,7 +887,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           ))}
                         </div>
                       ) : (
-                        <EmptyState title="No recent activity yet" description="As you approve reminders, draft emails, and simulate calls, JARVIS will build a living activity trail here." />
+                        <EmptyState title="No recent activity yet" description="As you approve reminders, draft emails, and simulate calls, Relay will build a living activity trail here." />
                       )}
                     </DashboardPanel>
 
@@ -934,7 +934,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <textarea value={taskForm.description} onChange={(e) => setTaskForm((c) => ({ ...c, description: e.target.value }))} placeholder="Optional description" className="field-input min-h-28 md:col-span-2" />
                       </div>
                       <div className="mt-4">
-                        <button type="button" className="jarvis-button" onClick={handleAddTask} disabled={!canCreateTask}>
+                        <button type="button" className="relay-button" onClick={handleAddTask} disabled={!canCreateTask}>
                           Create Task
                         </button>
                       </div>
@@ -1015,7 +1015,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <textarea value={noteForm.content} onChange={(e) => setNoteForm((c) => ({ ...c, content: e.target.value }))} placeholder="Paste meeting notes, ideas, or reminders" className="field-input min-h-48" />
                       </div>
                       <div className="mt-4">
-                        <button type="button" className="jarvis-button" onClick={handleAddNote} disabled={!canCreateNote}>
+                        <button type="button" className="relay-button" onClick={handleAddNote} disabled={!canCreateNote}>
                           Save Note
                         </button>
                       </div>
@@ -1202,6 +1202,13 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                                 <div>
                                   <p className="title-main text-base">{draft.subject}</p>
                                   <p className="mt-1 text-sm text-muted">{draft.recipient}</p>
+                                  <SyncStatusMeta
+                                    status={draft.syncStatus}
+                                    error={draft.syncError}
+                                    externalUrl={draft.externalUrl}
+                                    syncedLabel="Gmail draft"
+                                    localLabel="Local draft only"
+                                  />
                                 </div>
                                 <StatusPill value={draft.status} tone={draft.status === "approved" ? "success" : "warning"} />
                               </div>
@@ -1209,7 +1216,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           ))}
                         </div>
                       ) : (
-                        <EmptyState title="No drafts yet" description="Ask JARVIS to draft an email and it will appear here for editing." />
+                        <EmptyState title="No drafts yet" description="Ask Relay to draft an email and it will appear here for editing." />
                       )}
                     </DashboardPanel>
 
@@ -1230,7 +1237,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                     <DashboardPanel title="Reminder Builder">
                       <div className="grid gap-3 md:grid-cols-2">
                         <input value={reminderForm.title} onChange={(e) => setReminderForm((c) => ({ ...c, title: e.target.value }))} placeholder="Reminder title" className="field-input md:col-span-2" />
-                        <input value={reminderForm.when} onChange={(e) => setReminderForm((c) => ({ ...c, when: e.target.value }))} placeholder="When should JARVIS remind you?" className="field-input" />
+                        <input value={reminderForm.when} onChange={(e) => setReminderForm((c) => ({ ...c, when: e.target.value }))} placeholder="When should Relay remind you?" className="field-input" />
                         <select value={reminderForm.repeat} onChange={(e) => setReminderForm((c) => ({ ...c, repeat: e.target.value as Reminder["repeat"] }))} className="field-input">
                           <option value="none">No repeat</option>
                           <option value="daily">Daily</option>
@@ -1244,7 +1251,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         </select>
                       </div>
                       <div className="mt-4">
-                        <button type="button" className="jarvis-button" onClick={handleAddReminder} disabled={!canCreateReminder}>
+                        <button type="button" className="relay-button" onClick={handleAddReminder} disabled={!canCreateReminder}>
                           Create Reminder
                         </button>
                       </div>
@@ -1301,7 +1308,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               ) : null}
 
               {section === "calendar" ? (
-                <SectionPage eyebrow="Calendar" title="Plan the day with real events." description="The MVP now keeps calendar events in the server-backed workspace so your schedule behaves like the rest of JARVIS.">
+                <SectionPage eyebrow="Calendar" title="Plan the day with real events." description="The MVP now keeps calendar events in the server-backed workspace so your schedule behaves like the rest of Relay.">
                   <div className="mb-4 grid gap-4 md:grid-cols-3">
                     <MetricCard label="Events" value={String(calendarEvents.length)} detail="Live schedule items" />
                     <MetricCard label="Pending calls" value={String(pendingCallCount)} detail="May affect your plan" />
@@ -1322,7 +1329,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <textarea value={calendarForm.detail} onChange={(e) => setCalendarForm((current) => ({ ...current, detail: e.target.value }))} placeholder="Event detail or agenda" className="field-input min-h-28 md:col-span-2" />
                       </div>
                       <div className="mt-4">
-                        <button type="button" className="jarvis-button" onClick={handleAddCalendarEvent} disabled={!canCreateCalendarEvent}>
+                        <button type="button" className="relay-button" onClick={handleAddCalendarEvent} disabled={!canCreateCalendarEvent}>
                           Create Event
                         </button>
                       </div>
@@ -1340,6 +1347,13 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                                   <p className="title-main mt-2 text-xl">{item.title}</p>
                                   <p className="mt-1 text-sm text-muted">{item.detail}</p>
                                   {item.location ? <p className="copy-soft mt-2 text-sm">{item.location}</p> : null}
+                                  <SyncStatusMeta
+                                    status={item.syncStatus}
+                                    error={item.syncError}
+                                    externalUrl={item.externalUrl}
+                                    syncedLabel="Google Calendar"
+                                    localLabel="Local calendar only"
+                                  />
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                   <button type="button" className="small-action" onClick={() => setSelectedCalendarEventId(item.id)}>
@@ -1354,7 +1368,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           ))}
                         </div>
                       ) : (
-                        <EmptyState title="No calendar events yet" description="Add your first event here and JARVIS will reflect it in the dashboard schedule." />
+                        <EmptyState title="No calendar events yet" description="Add your first event here and Relay will reflect it in the dashboard schedule." />
                       )}
                     </DashboardPanel>
                   </div>
@@ -1371,7 +1385,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               ) : null}
 
               {section === "calls" ? (
-                <SectionPage eyebrow="Calls" title="A transparent calling assistant." description="Call plans clearly state who JARVIS is contacting, what it may ask, and what it must not do.">
+                <SectionPage eyebrow="Calls" title="A transparent calling assistant." description="Call plans clearly state who Relay is contacting, what it may ask, and what it must not do.">
                   <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
                     <DashboardPanel title="Call Queue">
                       {calls.length > 0 ? (
@@ -1409,7 +1423,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                                 <div className="mt-4 flex flex-wrap gap-2">
                                   <button
                                     type="button"
-                                    className="jarvis-button"
+                                    className="relay-button"
                                     onClick={() => {
                                       const pendingCall = pendingApprovals.find((action) => action.type === "place_call" && String(action.payload.callId) === call.id);
                                       if (pendingCall) {
@@ -1425,7 +1439,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           ))}
                         </div>
                       ) : (
-                        <EmptyState title="No call plans yet" description="Ask JARVIS to call a business or office, and it will prepare a transparent script here." />
+                        <EmptyState title="No call plans yet" description="Ask Relay to call a business or office, and it will prepare a transparent script here." />
                       )}
                     </DashboardPanel>
                     <DashboardPanel title="Latest Summary">
@@ -1470,7 +1484,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
               ) : null}
 
               {section === "notifications" ? (
-                <SectionPage eyebrow="Notifications" title="See what matters now." description="JARVIS groups mock notifications by urgency so the dashboard stays calm instead of noisy.">
+                <SectionPage eyebrow="Notifications" title="See what matters now." description="Relay groups mock notifications by urgency so the dashboard stays calm instead of noisy.">
                   <div className="mb-4 grid gap-4 md:grid-cols-4">
                     <MetricCard label="Urgent" value={String((insights?.rankedNotifications ?? notifications).filter((n) => n.category === "urgent").length)} detail="Needs attention now" />
                     <MetricCard label="Important" value={String((insights?.rankedNotifications ?? notifications).filter((n) => n.category === "important").length)} detail="Worth looking at soon" />
@@ -1523,9 +1537,9 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           className="field-input"
                         />
                         <p className="copy-soft text-sm leading-7">
-                          JARVIS uses this profile to personalize call scripts, email sign-offs, and the daily brief without changing the approval-first workflow.
+                          Relay uses this profile to personalize call scripts, email sign-offs, and the daily brief without changing the approval-first workflow.
                         </p>
-                        <button type="button" className="jarvis-button" onClick={handleSaveProfile}>
+                        <button type="button" className="relay-button" onClick={handleSaveProfile}>
                           Save Profile
                         </button>
                       </div>
@@ -1534,7 +1548,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                       <div className="space-y-4">
                         <IntegrationToggle
                           label="Calendar planning"
-                          description="Lets JARVIS prepare and store local calendar events for your schedule."
+                          description="Lets Relay prepare and store local calendar events for your schedule."
                           enabled={integrations.calendar}
                           onToggle={() => void updateIntegrations({ calendar: !integrations.calendar })}
                         />
@@ -1546,13 +1560,13 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         />
                         <IntegrationToggle
                           label="Call assistant"
-                          description="Allows JARVIS to prepare transparent simulated call plans on your behalf."
+                          description="Allows Relay to prepare transparent simulated call plans on your behalf."
                           enabled={integrations.callAssistant}
                           onToggle={() => void updateIntegrations({ callAssistant: !integrations.callAssistant })}
                         />
                         <IntegrationToggle
                           label="Share context with AI"
-                          description="Lets JARVIS use your notes, tasks, and reminders when preparing summaries and suggestions."
+                          description="Lets Relay use your notes, tasks, and reminders when preparing summaries and suggestions."
                           enabled={integrations.shareContextWithAi}
                           onToggle={() =>
                             void updateIntegrations({ shareContextWithAi: !integrations.shareContextWithAi })
@@ -1614,21 +1628,39 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           </div>
                         </div>
                         <p className="copy-strong text-sm leading-7">
-                          High-risk actions still require explicit approval, and simulated calls continue to identify JARVIS clearly on your behalf.
+                          High-risk actions still require explicit approval, and simulated calls continue to identify Relay clearly on your behalf.
                         </p>
                       </div>
                     </DashboardPanel>
                     <DashboardPanel title="Coming Integrations">
-                      <ul className="copy-strong space-y-3 text-sm leading-7">
-                        <li>• Google Calendar</li>
-                        <li>• Gmail or Outlook drafts and send approvals</li>
-                        <li>• Real outbound calls with policy-safe confirmation</li>
-                      </ul>
+                      <div className="space-y-4">
+                        <p className="copy-strong text-sm leading-7">
+                          Google Workspace can now be connected directly for Gmail draft sync and Google Calendar event sync.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {runtime.googleOAuthConfigured ? (
+                            <>
+                              <a href="/api/google/connect?service=workspace&redirect=/settings" className="small-action primary">
+                                Connect Google Workspace
+                              </a>
+                              {(runtime.gmailConfigured || runtime.calendarConfigured) ? (
+                                <a href="/api/google/disconnect?redirect=/settings" className="small-action">
+                                  Disconnect Google
+                                </a>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="copy-soft text-sm">
+                              Add `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_OAUTH_REDIRECT_URI` to enable one-click connect.
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </DashboardPanel>
                   </div>
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <DashboardPanel title="Runtime Status">
-                      <div className="grid gap-3 md:grid-cols-3">
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                         <TaskInsightCard label="Storage" value={runtime.storageMode} detail="Current persistence mode" />
                         <TaskInsightCard
                           label="Database"
@@ -1640,9 +1672,24 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                           value={runtime.openAiConfigured ? "configured" : "pending"}
                           detail={runtime.openAiConfigured ? "OPENAI_API_KEY found" : "Optional for future provider wiring"}
                         />
+                        <TaskInsightCard
+                          label="Google OAuth"
+                          value={runtime.googleOAuthConfigured ? "ready" : "pending"}
+                          detail={runtime.googleOAuthConfigured ? "Client credentials found" : "Add Google OAuth env vars"}
+                        />
+                        <TaskInsightCard
+                          label="Gmail"
+                          value={runtime.gmailConfigured ? "connected" : "pending"}
+                          detail={runtime.gmailConfigured ? "Draft sync is available" : "Add GOOGLE_GMAIL_ACCESS_TOKEN"}
+                        />
+                        <TaskInsightCard
+                          label="Calendar"
+                          value={runtime.calendarConfigured ? "connected" : "pending"}
+                          detail={runtime.calendarConfigured ? "Event sync is available" : "Add GOOGLE_CALENDAR_ACCESS_TOKEN"}
+                        />
                       </div>
                       <p className="copy-soft mt-4 text-sm leading-7">
-                        The current MVP works immediately with file-backed state, so you can try the full dashboard and approval workflow before connecting a real database.
+                        The current MVP works immediately with file-backed state, and can now optionally connect Gmail drafts plus Google Calendar through OAuth when the Google credentials are configured.
                       </p>
                     </DashboardPanel>
                     <DashboardPanel title="Getting Started">
@@ -1658,7 +1705,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                     <DashboardPanel title="Backend State">
                       <div className="space-y-4">
                         <p className="copy-strong text-sm leading-7">
-                          JARVIS now keeps its workspace state through the server layer instead of relying only on browser-local memory. Tasks, reminders, drafts, calls, approvals, and appearance preferences persist in the project runtime itself.
+                          Relay now keeps its workspace state through the server layer instead of relying only on browser-local memory. Tasks, reminders, drafts, calls, approvals, and appearance preferences persist in the project runtime itself.
                         </p>
                         <div className="grid gap-3 md:grid-cols-3">
                           <TaskInsightCard label="Tasks" value={String(tasks.length)} detail="Server-backed records" />
@@ -1672,7 +1719,7 @@ export function JarvisApp({ section = "dashboard" }: { section?: NavKey }) {
                         <p className="copy-soft text-sm leading-7">
                           Reset the workspace back to the seeded demo dataset whenever you want a clean walkthrough for testing or presenting.
                         </p>
-                        <button type="button" className="jarvis-button" onClick={() => void resetState()}>
+                        <button type="button" className="relay-button" onClick={() => void resetState()}>
                           Restore Demo Workspace
                         </button>
                       </div>
@@ -1778,7 +1825,7 @@ function WorkspaceSplash() {
         <div className="hero-panel max-w-2xl text-center">
           <p className="eyebrow">Booting Workspace</p>
           <h1 className="title-hero mt-5 font-display text-[3rem] leading-[1.02] sm:text-[4rem]">
-            Bringing JARVIS online.
+            Bringing Relay online.
           </h1>
           <p className="copy-strong mt-4 text-lg leading-8">
             Loading your command center, recent approvals, assistant history, and daily brief.
@@ -1804,7 +1851,7 @@ function AuthGate({
         <div className="hero-panel max-w-3xl">
           <p className="eyebrow">Secure Entry</p>
           <h1 className="title-hero mt-5 max-w-[760px] font-display text-[3rem] leading-[1.02] sm:text-[4.25rem]">
-            Sign in to your JARVIS command center.
+            Sign in to your Relay command center.
           </h1>
           <p className="copy-strong mt-4 max-w-[720px] text-lg leading-8">
             Your approvals, notes, tasks, reminders, drafts, and simulated calls stay organized behind a real workspace entry flow.
@@ -1819,15 +1866,15 @@ function AuthGate({
               <p className="accent-copy text-sm uppercase tracking-[0.18em]">Workspace Promise</p>
               <ul className="copy-strong mt-4 space-y-3 text-sm leading-7">
                 <li>• Important actions stay approval-first.</li>
-                <li>• Calls stay transparent about what JARVIS can and cannot do.</li>
+                <li>• Calls stay transparent about what Relay can and cannot do.</li>
                 <li>• Settings, permissions, and assistant behavior persist with your workspace.</li>
               </ul>
             </div>
             <div className="soft-card p-5">
               <p className="title-main text-xl">{profile.name}</p>
               <p className="copy-soft mt-1 text-sm">{profile.role} workspace</p>
-              <button type="button" className="jarvis-button mt-6 w-full justify-center" onClick={onSignIn}>
-                Continue into JARVIS
+              <button type="button" className="relay-button mt-6 w-full justify-center" onClick={onSignIn}>
+                Continue into Relay
               </button>
             </div>
           </div>
@@ -1837,17 +1884,17 @@ function AuthGate({
   );
 }
 
-function JarvisBrand() {
+function RelayBrand() {
   return (
     <div className="flex items-center gap-3">
-      <div className="jarvis-logo" aria-hidden="true">
+      <div className="relay-logo" aria-hidden="true">
         <span />
         <span />
         <span />
       </div>
       <div>
-        <p className="font-display text-[2.35rem] leading-none tracking-[0.18em] text-[var(--brand-wordmark)]">JARVIS</p>
-        <p className="mt-1 text-[0.72rem] uppercase tracking-[0.26em] text-[var(--brand-subtitle)]">Life Command</p>
+        <p className="font-display text-[2.35rem] leading-none tracking-[0.18em] text-[var(--brand-wordmark)]">RELAY</p>
+        <p className="mt-1 text-[0.72rem] uppercase tracking-[0.26em] text-[var(--brand-subtitle)]">Approval-First AI</p>
       </div>
     </div>
   );
@@ -1870,7 +1917,7 @@ function TopCommandBar({
         </button>
 
         <div className="min-w-0 flex-1">
-          <p className="title-soft text-base">What would you like JARVIS to do?</p>
+          <p className="title-soft text-base">What would you like Relay to do?</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {commandSamples.slice(0, 2).map((sample) => (
               <button key={sample} type="button" onClick={() => setCommand(sample)} className="rounded-full border border-[color:color-mix(in_srgb,var(--surface-outline)_55%,transparent_45%)] px-3 py-1.5 text-sm text-muted transition hover:border-[color:color-mix(in_srgb,var(--warn)_40%,transparent_60%)] hover:text-[var(--title)]">
@@ -2261,7 +2308,7 @@ function NoteEditor({
         <button type="button" className="soft-outline" onClick={() => onSuggestTags(note.id)}>
           Suggest Tags
         </button>
-        <button type="button" className="jarvis-button" onClick={onExtractTasks}>
+        <button type="button" className="relay-button" onClick={onExtractTasks}>
           Extract Tasks
         </button>
       </div>
@@ -2325,6 +2372,13 @@ function DraftEditor({
 }) {
   return (
     <div className="space-y-3">
+      <SyncStatusMeta
+        status={draft.syncStatus}
+        error={draft.syncError}
+        externalUrl={draft.externalUrl}
+        syncedLabel="Open Gmail draft"
+        localLabel="This draft is still local to Relay"
+      />
       <input
         value={draft.recipient}
         onChange={(e) => onSave(draft.id, { recipient: e.target.value })}
@@ -2377,6 +2431,15 @@ function CalendarEventEditor({
 }) {
   return (
     <div className="grid gap-3 md:grid-cols-2">
+      <div className="md:col-span-2">
+        <SyncStatusMeta
+          status={event.syncStatus}
+          error={event.syncError}
+          externalUrl={event.externalUrl}
+          syncedLabel="Open Google Calendar event"
+          localLabel="This event is still local to Relay"
+        />
+      </div>
       <input value={event.title} onChange={(e) => onSave(event.id, { title: e.target.value })} className="field-input md:col-span-2" />
       <input value={event.start} onChange={(e) => onSave(event.id, { start: e.target.value })} className="field-input" />
       <input value={event.end} onChange={(e) => onSave(event.id, { end: e.target.value })} className="field-input" />
@@ -2689,6 +2752,44 @@ function NotificationRow({
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+function SyncStatusMeta({
+  status,
+  error,
+  externalUrl,
+  syncedLabel,
+  localLabel,
+}: {
+  status?: "local" | "synced" | "failed";
+  error?: string;
+  externalUrl?: string;
+  syncedLabel: string;
+  localLabel: string;
+}) {
+  if (!status) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+      <StatusPill
+        value={status}
+        tone={status === "synced" ? "success" : status === "failed" ? "danger" : "neutral"}
+      />
+      {status === "synced" ? (
+        externalUrl ? (
+          <a href={externalUrl} target="_blank" rel="noreferrer" className="accent-copy underline-offset-4 hover:underline">
+            {syncedLabel}
+          </a>
+        ) : (
+          <span className="copy-soft">{syncedLabel}</span>
+        )
+      ) : null}
+      {status === "local" ? <span className="copy-soft">{localLabel}</span> : null}
+      {status === "failed" ? <span className="text-[var(--danger)]">{error ?? "Sync failed."}</span> : null}
     </div>
   );
 }

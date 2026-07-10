@@ -1,4 +1,4 @@
-import { getJarvisState } from "@/lib/server/jarvis-store";
+import { getRelayState } from "@/lib/server/relay-store";
 import type { DashboardInsightSnapshot, NotificationItem } from "@/lib/types";
 
 const notificationRank: Record<NotificationItem["category"], number> = {
@@ -9,7 +9,7 @@ const notificationRank: Record<NotificationItem["category"], number> = {
 };
 
 export async function getDashboardInsights(): Promise<DashboardInsightSnapshot> {
-  const state = await getJarvisState();
+  const state = await getRelayState();
   if (!state.integrations.shareContextWithAi) {
     return {
       dailyBrief: `${state.profile.name}, context sharing is off, so today's brief is privacy-limited.`,
@@ -57,7 +57,7 @@ export async function getDashboardInsights(): Promise<DashboardInsightSnapshot> 
     overdueCount > 0
       ? "Clear the overdue work first so the rest of the day feels lighter."
       : pendingApprovals > 0
-        ? "Your highest-leverage move is approving or editing the actions JARVIS already prepared."
+        ? "Your highest-leverage move is approving or editing the actions Relay already prepared."
         : highPriorityTasks > 0
           ? "A short focus block on the high-priority tasks would create the most momentum right now."
           : "You have room to plan ahead. Use the assistant bar to prepare your next move before the day gets busier.";
@@ -76,7 +76,7 @@ export async function getDashboardInsights(): Promise<DashboardInsightSnapshot> 
   const suggestionCards = [
     pendingApprovals > 0
       ? "Review the confirmation queue and approve the ready actions."
-      : "Queue one new reminder or draft so JARVIS can prepare the next step for you.",
+      : "Queue one new reminder or draft so Relay can prepare the next step for you.",
     simulatedCalls > 0
       ? "Turn the latest call summary into a follow-up reminder or task."
       : "Prepare one transparent call plan for something you would rather not call about yourself.",

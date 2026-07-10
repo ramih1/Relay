@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { JarvisProvider } from "@/components/jarvis-provider";
+import { RelayProvider } from "@/components/relay-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "JARVIS",
+  title: "Relay",
   description: "A calm AI productivity command center with transparent approvals.",
 };
 
@@ -15,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <JarvisProvider>{children}</JarvisProvider>
+        <RelayProvider>{children}</RelayProvider>
       </body>
     </html>
   );

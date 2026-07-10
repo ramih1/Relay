@@ -156,12 +156,12 @@ export const initialCalls: CallRequest[] = [
     phoneNumber: "(555) 210-1184",
     purpose: "Ask whether the basketball court is free tonight after 7.",
     script:
-      "Hi, I'm JARVIS, an AI assistant calling on behalf of Rami. I'm checking whether the basketball court is open tonight after 7 PM, and whether there's any closing time to keep in mind.",
+      "Hi, I'm Relay, an AI assistant calling on behalf of Rami. I'm checking whether the basketball court is open tonight after 7 PM, and whether there's any closing time to keep in mind.",
     allowedActions: ["Ask availability", "Ask closing time"],
     restrictedActions: ["Do not book anything", "Do not share private information"],
     status: "simulated",
     transcript:
-      "JARVIS: Hi, I'm JARVIS, an AI assistant calling on behalf of Rami...\nGym: The court is free after 7:30 PM tonight.\nJARVIS: Great, is there a closing time?\nGym: We close at 10 PM.\nJARVIS: Thanks, I'll pass that along.",
+      "Relay: Hi, I'm Relay, an AI assistant calling on behalf of Rami...\nGym: The court is free after 7:30 PM tonight.\nRelay: Great, is there a closing time?\nGym: We close at 10 PM.\nRelay: Thanks, I'll pass that along.",
     summary: "Court is available after 7:30 PM. No booking required. Facility closes at 10 PM.",
   },
 ];

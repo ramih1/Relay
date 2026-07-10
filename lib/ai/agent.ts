@@ -461,7 +461,7 @@ function buildCallPlan(
     contactName,
     phoneNumber: "(555) 210-1184",
     purpose,
-    script: `Hi, I'm JARVIS, an AI assistant calling on behalf of ${profile.name}, a ${profile.role.toLowerCase()}. I'm calling ${contactName} to ${purpose.toLowerCase()}.`,
+    script: `Hi, I'm Relay, an AI assistant calling on behalf of ${profile.name}, a ${profile.role.toLowerCase()}. I'm calling ${contactName} to ${purpose.toLowerCase()}.`,
     allowedActions: ["Ask clarifying questions", "Confirm availability", "Ask operating hours"],
     restrictedActions: ["Do not book anything", "Do not share private details"],
     status: "pending",

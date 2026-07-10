@@ -2,6 +2,12 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { buildAssistantCommandPlan } from "@/lib/ai/agent";
 import {
+  createGoogleCalendarEvent,
+  createGoogleGmailDraft,
+  getGoogleConnectionStatus,
+  getGoogleWorkspaceConfig,
+} from "@/lib/server/google-workspace";
+import {
   initialCalendarEvents,
   initialCalls,
   initialEmailDrafts,
@@ -16,8 +22,8 @@ import type {
   AssistantRequestEntry,
   CallRequest,
   EmailDraft,
-  JarvisMutationRequest,
-  JarvisStateSnapshot,
+  RelayMutationRequest,
+  RelayStateSnapshot,
   Note,
   PendingAction,
   Reminder,
@@ -26,17 +32,35 @@ import type {
 } from "@/lib/types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
-const STATE_FILE = path.join(DATA_DIR, "jarvis-state.json");
+const STATE_FILE = path.join(DATA_DIR, "relay-state.json");
 
 function getRuntimeStatus(): RuntimeStatus {
+  const googleWorkspace = getGoogleWorkspaceConfig();
+
   return {
     storageMode: "file",
     databaseConfigured: Boolean(process.env.DATABASE_URL),
     openAiConfigured: Boolean(process.env.OPENAI_API_KEY),
+    googleOAuthConfigured: googleWorkspace.googleOAuthConfigured,
+    gmailConfigured: googleWorkspace.gmailConfigured,
+    calendarConfigured: googleWorkspace.calendarConfigured,
   };
 }
 
-function createInitialState(): JarvisStateSnapshot {
+async function resolveRuntimeStatus(): Promise<RuntimeStatus> {
+  const googleWorkspace = await getGoogleConnectionStatus();
+
+  return {
+    storageMode: "file",
+    databaseConfigured: Boolean(process.env.DATABASE_URL),
+    openAiConfigured: Boolean(process.env.OPENAI_API_KEY),
+    googleOAuthConfigured: googleWorkspace.googleOAuthConfigured,
+    gmailConfigured: googleWorkspace.gmailConfigured,
+    calendarConfigured: googleWorkspace.calendarConfigured,
+  };
+}
+
+function createInitialState(): RelayStateSnapshot {
   return {
     tasks: structuredClone(initialTasks),
     notes: structuredClone(initialNotes),
@@ -54,7 +78,7 @@ function createInitialState(): JarvisStateSnapshot {
       {
         id: "log-seed-1",
         title: "Demo workspace seeded",
-        detail: "Loaded starter tasks, reminders, notes, and approval items for JARVIS.",
+        detail: "Loaded starter tasks, reminders, notes, and approval items for Relay.",
         category: "system",
         impact: "info",
         happenedAt: new Date().toISOString(),
@@ -84,25 +108,25 @@ function createInitialState(): JarvisStateSnapshot {
   };
 }
 
-let inMemoryState: JarvisStateSnapshot | null = null;
+let inMemoryState: RelayStateSnapshot | null = null;
 
 async function ensureDataDir() {
   await mkdir(DATA_DIR, { recursive: true });
 }
 
-async function persistState(state: JarvisStateSnapshot) {
+async function persistState(state: RelayStateSnapshot) {
   await ensureDataDir();
   await writeFile(STATE_FILE, JSON.stringify(state, null, 2), "utf8");
 }
 
-async function loadState(): Promise<JarvisStateSnapshot> {
+async function loadState(): Promise<RelayStateSnapshot> {
   if (inMemoryState) {
     return inMemoryState;
   }
 
   try {
     const raw = await readFile(STATE_FILE, "utf8");
-    const parsed = JSON.parse(raw) as Partial<JarvisStateSnapshot>;
+    const parsed = JSON.parse(raw) as Partial<RelayStateSnapshot>;
     inMemoryState = {
       ...createInitialState(),
       ...parsed,
@@ -123,22 +147,24 @@ async function loadState(): Promise<JarvisStateSnapshot> {
         ...createInitialState().session,
         ...parsed.session,
       },
-      runtime: getRuntimeStatus(),
+      runtime: await resolveRuntimeStatus(),
     };
   } catch {
     inMemoryState = createInitialState();
     await persistState(inMemoryState);
   }
 
+  inMemoryState.runtime = await resolveRuntimeStatus();
+
   return inMemoryState;
 }
 
-function appendFeed(state: JarvisStateSnapshot, message: string) {
+function appendFeed(state: RelayStateSnapshot, message: string) {
   state.assistantFeed = [message, ...state.assistantFeed];
 }
 
 function recordAssistantRequest(
-  state: JarvisStateSnapshot,
+  state: RelayStateSnapshot,
   entry: Omit<AssistantRequestEntry, "id" | "happenedAt">,
 ) {
   state.assistantRequests = [
@@ -152,7 +178,7 @@ function recordAssistantRequest(
 }
 
 function recordEvent(
-  state: JarvisStateSnapshot,
+  state: RelayStateSnapshot,
   entry: Omit<ActionLogEntry, "id" | "happenedAt">,
 ) {
   state.actionLog = [
@@ -165,11 +191,11 @@ function recordEvent(
   ].slice(0, 40);
 }
 
-function updateNote(state: JarvisStateSnapshot, noteId: string, updates: Partial<Note>) {
+function updateNote(state: RelayStateSnapshot, noteId: string, updates: Partial<Note>) {
   state.notes = state.notes.map((note) => (note.id === noteId ? { ...note, ...updates } : note));
 }
 
-function buildAssistantContext(state: JarvisStateSnapshot) {
+function buildAssistantContext(state: RelayStateSnapshot) {
   return {
     latestNote: state.notes[0],
     upcomingEvents: [...state.calendarEvents].sort((left, right) => left.start.localeCompare(right.start)),
@@ -179,7 +205,116 @@ function buildAssistantContext(state: JarvisStateSnapshot) {
   };
 }
 
-function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
+async function syncDraftIfConfigured(state: RelayStateSnapshot, draftId: string) {
+  if (!state.runtime.gmailConfigured) {
+    return;
+  }
+
+  const draft = state.drafts.find((item) => item.id === draftId);
+  if (!draft) {
+    return;
+  }
+
+  if (!draft.recipient || !draft.subject || !draft.body) {
+    state.drafts = state.drafts.map((item) =>
+      item.id === draftId
+        ? {
+            ...item,
+            syncStatus: "failed",
+            syncError: "Recipient, subject, and body are required before syncing a Gmail draft.",
+          }
+        : item,
+    );
+    return;
+  }
+
+  try {
+    const result = await createGoogleGmailDraft(draft, state.profile.email);
+    state.drafts = state.drafts.map((item) =>
+      item.id === draftId
+        ? {
+            ...item,
+            syncStatus: "synced",
+            externalId: result.id,
+            externalUrl: result.id ? `https://mail.google.com/mail/u/0/#drafts?compose=${result.id}` : item.externalUrl,
+            syncError: undefined,
+          }
+        : item,
+    );
+    recordEvent(state, {
+      title: "Gmail draft synced",
+      detail: draft.subject,
+      category: "productivity",
+      impact: "success",
+    });
+  } catch (error) {
+    state.drafts = state.drafts.map((item) =>
+      item.id === draftId
+        ? {
+            ...item,
+            syncStatus: "failed",
+            syncError: error instanceof Error ? error.message : "Failed to sync Gmail draft.",
+          }
+        : item,
+    );
+    recordEvent(state, {
+      title: "Gmail draft sync failed",
+      detail: draft.subject,
+      category: "system",
+      impact: "warning",
+    });
+  }
+}
+
+async function syncCalendarEventIfConfigured(state: RelayStateSnapshot, eventId: string) {
+  if (!state.runtime.calendarConfigured) {
+    return;
+  }
+
+  const event = state.calendarEvents.find((item) => item.id === eventId);
+  if (!event) {
+    return;
+  }
+
+  try {
+    const result = await createGoogleCalendarEvent(event);
+    state.calendarEvents = state.calendarEvents.map((item) =>
+      item.id === eventId
+        ? {
+            ...item,
+            syncStatus: "synced",
+            externalId: result.id,
+            externalUrl: result.htmlLink,
+            syncError: undefined,
+          }
+        : item,
+    );
+    recordEvent(state, {
+      title: "Google Calendar event synced",
+      detail: event.title,
+      category: "productivity",
+      impact: "success",
+    });
+  } catch (error) {
+    state.calendarEvents = state.calendarEvents.map((item) =>
+      item.id === eventId
+        ? {
+            ...item,
+            syncStatus: "failed",
+            syncError: error instanceof Error ? error.message : "Failed to sync Google Calendar event.",
+          }
+        : item,
+    );
+    recordEvent(state, {
+      title: "Calendar sync failed",
+      detail: event.title,
+      category: "system",
+      impact: "warning",
+    });
+  }
+}
+
+function submitCommand(state: RelayStateSnapshot, rawInput: string) {
   const input = rawInput.trim();
   if (!input) {
     return;
@@ -210,7 +345,7 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
 
   if (!state.preferences.approvalsLocked && plan.pendingActions?.every((action) => action.risk === "low")) {
     for (const action of plan.pendingActions) {
-      approveAction(state, action.id);
+      void approveAction(state, action.id);
     }
 
     appendFeed(state, "Low-risk approval lock is off, so I applied that safe action directly.");
@@ -223,7 +358,7 @@ function submitCommand(state: JarvisStateSnapshot, rawInput: string) {
   }
 }
 
-function approveAction(state: JarvisStateSnapshot, actionId: string) {
+async function approveAction(state: RelayStateSnapshot, actionId: string) {
   const action = state.pendingActions.find((item) => item.id === actionId);
   if (!action || action.status !== "pending") {
     return;
@@ -275,23 +410,35 @@ function approveAction(state: JarvisStateSnapshot, actionId: string) {
   }
 
   if (action.type === "create_calendar_event") {
+    const createdEventId = crypto.randomUUID();
     state.calendarEvents = [
       {
-        id: crypto.randomUUID(),
+        id: createdEventId,
         title: String(action.payload.title ?? "New event"),
         detail: String(action.payload.detail ?? ""),
         start: String(action.payload.start ?? "Today at 1:00 PM"),
         end: String(action.payload.end ?? "Later"),
         location: String(action.payload.location ?? ""),
         tone: (action.payload.tone as Task["priority"] extends never ? never : "teal" | "gold" | "rose") ?? "teal",
+        syncStatus: state.runtime.calendarConfigured ? "local" : undefined,
       },
       ...state.calendarEvents,
     ];
+    await syncCalendarEventIfConfigured(state, createdEventId);
   }
 
   if (action.type === "draft_email") {
     const draftId = String(action.payload.draftId);
-    state.drafts = state.drafts.map((draft) => (draft.id === draftId ? { ...draft, status: "approved" } : draft));
+    state.drafts = state.drafts.map((draft) =>
+      draft.id === draftId
+        ? {
+            ...draft,
+            status: "approved",
+            syncStatus: state.runtime.gmailConfigured ? "local" : draft.syncStatus,
+          }
+        : draft,
+    );
+    await syncDraftIfConfigured(state, draftId);
   }
 
   if (action.type === "place_call") {
@@ -302,7 +449,7 @@ function approveAction(state: JarvisStateSnapshot, actionId: string) {
             ...call,
             status: "simulated",
             transcript:
-              `JARVIS: Hi, I'm JARVIS calling on behalf of ${state.profile.name}.\nGym: The court should be free after 7:30 PM.\nJARVIS: Thanks. Is there a closing time?\nGym: We close at 10 PM tonight.\nJARVIS: Perfect, I'll pass that along to ${state.profile.name}.`,
+              `Relay: Hi, I'm Relay calling on behalf of ${state.profile.name}.\nGym: The court should be free after 7:30 PM.\nRelay: Thanks. Is there a closing time?\nGym: We close at 10 PM tonight.\nRelay: Perfect, I'll pass that along to ${state.profile.name}.`,
             summary: "Court is free after 7:30 PM and the gym closes at 10 PM.",
           }
         : call,
@@ -334,7 +481,7 @@ function approveAction(state: JarvisStateSnapshot, actionId: string) {
   });
 }
 
-function cancelAction(state: JarvisStateSnapshot, actionId: string) {
+function cancelAction(state: RelayStateSnapshot, actionId: string) {
   const action = state.pendingActions.find((item) => item.id === actionId);
   state.pendingActions = state.pendingActions.map((item) =>
     item.id === actionId ? { ...item, status: "cancelled" } : item,
@@ -349,7 +496,7 @@ function cancelAction(state: JarvisStateSnapshot, actionId: string) {
   }
 }
 
-function updatePendingAction(state: JarvisStateSnapshot, actionId: string, updates: Partial<PendingAction>) {
+function updatePendingAction(state: RelayStateSnapshot, actionId: string, updates: Partial<PendingAction>) {
   const action = state.pendingActions.find((item) => item.id === actionId);
   state.pendingActions = state.pendingActions.map((item) =>
     item.id === actionId
@@ -373,32 +520,32 @@ function updatePendingAction(state: JarvisStateSnapshot, actionId: string, updat
   }
 }
 
-export async function getJarvisState(): Promise<JarvisStateSnapshot> {
+export async function getRelayState(): Promise<RelayStateSnapshot> {
   return structuredClone(await loadState());
 }
 
-export async function resetJarvisState() {
+export async function resetRelayState() {
   const previousSession = (await loadState()).session;
   inMemoryState = {
     ...createInitialState(),
     session: previousSession,
   };
   await persistState(inMemoryState);
-  return getJarvisState();
+  return getRelayState();
 }
 
-export async function submitAssistantCommand(input: string) {
-  return applyJarvisMutation({ type: "submit_command", input });
+export async function submitRelayCommand(input: string) {
+  return applyRelayMutation({ type: "submit_command", input });
 }
 
-export async function applyJarvisMutation(input: JarvisMutationRequest): Promise<JarvisStateSnapshot> {
+export async function applyRelayMutation(input: RelayMutationRequest): Promise<RelayStateSnapshot> {
   const state = await loadState();
 
   if (
     !state.session.isAuthenticated &&
     input.type !== "sign_in"
   ) {
-    appendFeed(state, "Sign in to continue using the JARVIS workspace.");
+    appendFeed(state, "Sign in to continue using the Relay workspace.");
     recordEvent(state, {
       title: "Blocked mutation while signed out",
       detail: input.type,
@@ -407,7 +554,7 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
     });
     inMemoryState = state;
     await persistState(state);
-    return getJarvisState();
+    return getRelayState();
   }
 
   switch (input.type) {
@@ -430,7 +577,7 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
         impact: "warning",
       });
       await persistState(inMemoryState);
-      return getJarvisState();
+      return getRelayState();
     }
     case "submit_command":
       submitCommand(state, input.input);
@@ -460,7 +607,7 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
       });
       break;
     case "approve_action":
-      approveAction(state, input.actionId);
+      await approveAction(state, input.actionId);
       break;
     case "cancel_action":
       cancelAction(state, input.actionId);
@@ -650,18 +797,23 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
       });
       break;
     case "add_calendar_event":
-      state.calendarEvents = [
-        {
-          id: crypto.randomUUID(),
-          title: input.input.title,
-          detail: input.input.detail,
-          start: input.input.start,
-          end: input.input.end,
-          location: input.input.location,
-          tone: input.input.tone,
-        },
-        ...state.calendarEvents,
-      ];
+      {
+        const calendarEventId = crypto.randomUUID();
+        state.calendarEvents = [
+          {
+            id: calendarEventId,
+            title: input.input.title,
+            detail: input.input.detail,
+            start: input.input.start,
+            end: input.input.end,
+            location: input.input.location,
+            tone: input.input.tone,
+            syncStatus: state.runtime.calendarConfigured ? "local" : undefined,
+          },
+          ...state.calendarEvents,
+        ];
+        await syncCalendarEventIfConfigured(state, calendarEventId);
+      }
       appendFeed(state, `Added a calendar event: ${input.input.title}.`);
       recordEvent(state, {
         title: "Calendar event created",
@@ -768,7 +920,16 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
       {
         const draft = state.drafts.find((item) => item.id === input.draftId);
       state.drafts = state.drafts.map((draft) =>
-        draft.id === input.draftId ? { ...draft, ...input.updates } : draft,
+        draft.id === input.draftId
+          ? {
+              ...draft,
+              ...input.updates,
+              syncStatus:
+                (input.updates.status ?? draft.status) === "approved" && state.runtime.gmailConfigured
+                  ? "local"
+                  : draft.syncStatus,
+            }
+          : draft,
       );
         if (draft) {
           recordEvent(state, {
@@ -777,6 +938,9 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
             category: "productivity",
             impact: "info",
           });
+        }
+        if ((input.updates.status === "approved" || draft?.status === "approved") && draft) {
+          await syncDraftIfConfigured(state, input.draftId);
         }
       }
       break;
@@ -892,5 +1056,5 @@ export async function applyJarvisMutation(input: JarvisMutationRequest): Promise
 
   inMemoryState = state;
   await persistState(state);
-  return getJarvisState();
+  return getRelayState();
 }

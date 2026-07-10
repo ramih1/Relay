@@ -43,7 +43,12 @@ export type RuntimeStatus = {
   storageMode: "file";
   databaseConfigured: boolean;
   openAiConfigured: boolean;
+  googleOAuthConfigured: boolean;
+  gmailConfigured: boolean;
+  calendarConfigured: boolean;
 };
+
+export type SyncStatus = "local" | "synced" | "failed";
 
 export type Task = {
   id: string;
@@ -71,6 +76,10 @@ export type CalendarEvent = {
   end: string;
   location?: string;
   tone: "teal" | "gold" | "rose";
+  syncStatus?: SyncStatus;
+  externalId?: string;
+  externalUrl?: string;
+  syncError?: string;
 };
 
 export type Note = {
@@ -97,6 +106,10 @@ export type EmailDraft = {
   body: string;
   tone: "professional" | "friendly" | "short" | "formal";
   status: "draft" | "approved";
+  syncStatus?: SyncStatus;
+  externalId?: string;
+  externalUrl?: string;
+  syncError?: string;
 };
 
 export type CallRequest = {
@@ -148,7 +161,7 @@ export type AssistantRequestEntry = {
   happenedAt: string;
 };
 
-export type JarvisStateSnapshot = {
+export type RelayStateSnapshot = {
   tasks: Task[];
   notes: Note[];
   reminders: Reminder[];
@@ -175,7 +188,7 @@ export type DashboardInsightSnapshot = {
   rankedNotifications: NotificationItem[];
 };
 
-export type JarvisMutationRequest =
+export type RelayMutationRequest =
   | { type: "reset_state" }
   | { type: "submit_command"; input: string }
   | { type: "approve_action"; actionId: string }

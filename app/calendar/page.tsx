@@ -1,5 +1,5 @@
-import { JarvisApp } from "@/components/jarvis-app";
+import { RelayApp } from "@/components/relay-app";
 
 export default function CalendarPage() {
-  return <JarvisApp section="calendar" />;
+  return <RelayApp section="calendar" />;
 }

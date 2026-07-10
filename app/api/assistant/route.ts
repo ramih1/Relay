@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { submitAssistantCommand } from "@/lib/server/jarvis-store";
+import { submitRelayCommand } from "@/lib/server/relay-store";
 
 export async function POST(request: Request) {
   const payload = (await request.json()) as { input?: string };
@@ -8,5 +8,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Command input is required." }, { status: 400 });
   }
 
-  return NextResponse.json(await submitAssistantCommand(payload.input));
+  return NextResponse.json(await submitRelayCommand(payload.input));
 }
