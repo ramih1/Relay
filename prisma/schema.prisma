@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             String             @id @default(uuid())
+  name           String?
+  email          String             @unique
+  createdAt      DateTime           @default(now())
+  tasks          Task[]
+  notes          Note[]
+  reminders      Reminder[]
+  calendarEvents CalendarEvent[]
+  notifications  Notification[]
+  emailDrafts    EmailDraft[]
+  callRequests   CallRequest[]
+  pendingActions PendingAction[]
+  actionLogs     ActionLog[]
+  assistantRuns  AssistantRequest[]
+}
+
+model Task {
+  id          String     @id @default(uuid())
+  userId      String
+  title       String
+  description String?
+  due         String
+  status      TaskStatus @default(PENDING)
+  priority    Priority   @default(MEDIUM)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([userId, priority])
+}
+
+model Reminder {
+  id        String         @id @default(uuid())
+  userId    String
+  title     String
+  when      String
+  repeat    RepeatRule     @default(NONE)
+  priority  Priority       @default(MEDIUM)
+  status    ReminderStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model CalendarEvent {
+  id        String    @id @default(uuid())
+  userId    String
+  title     String
+  detail    String
+  start     String
+  end       String
+  location  String?
+  tone      EventTone @default(TEAL)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Note {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  content   String
+  summary   String
+  tags      String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Notification {
+  id        String               @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  category  NotificationCategory @default(LATER)
+  source    String
+  isRead    Boolean              @default(false)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, category])
+}
+
+model EmailDraft {
+  id        String           @id @default(uuid())
+  userId    String
+  recipient String
+  subject   String
+  body      String
+  tone      EmailTone        @default(PROFESSIONAL)
+  status    EmailDraftStatus @default(DRAFT)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model CallRequest {
+  id                String     @id @default(uuid())
+  userId            String
+  contactName       String
+  phoneNumber       String
+  purpose           String
+  script            String
+  allowedActions    String[]
+  restrictedActions String[]
+  status            CallStatus @default(PENDING)
+  transcript        String?
+  summary           String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model PendingAction {
+  id          String              @id @default(uuid())
+  userId      String
+  type        PendingActionType   @default(CREATE_TASK)
+  title       String
+  description String
+  risk        RiskLevel           @default(MEDIUM)
+  status      PendingActionStatus @default(PENDING)
+  payload     Json
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model ActionLog {
+  id         String            @id @default(uuid())
+  userId     String
+  title      String
+  detail     String
+  category   ActionLogCategory
+  impact     ActionImpact
+  happenedAt DateTime          @default(now())
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, happenedAt])
+}
+
+model AssistantRequest {
+  id         String                 @id @default(uuid())
+  userId     String
+  input      String
+  outcome    String
+  status     AssistantRequestStatus @default(QUEUED)
+  happenedAt DateTime               @default(now())
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, happenedAt])
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TaskStatus {
+  PENDING
+  DONE
+  OVERDUE
+}
+
+enum ReminderStatus {
+  ACTIVE
+  SNOOZED
+  DONE
+}
+
+enum RepeatRule {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum EventTone {
+  TEAL
+  GOLD
+  ROSE
+}
+
+enum NotificationCategory {
+  URGENT
+  IMPORTANT
+  LATER
+  LOW
+}
+
+enum EmailTone {
+  PROFESSIONAL
+  FRIENDLY
+  SHORT
+  FORMAL
+}
+
+enum EmailDraftStatus {
+  DRAFT
+  APPROVED
+}
+
+enum CallStatus {
+  PENDING
+  APPROVED
+  SIMULATED
+}
+
+enum PendingActionType {
+  CREATE_REMINDER
+  CREATE_TASK
+  DRAFT_EMAIL
+  CREATE_TASKS_FROM_NOTE
+  PLACE_CALL
+  CREATE_FOLLOWUP_TASK
+}
+
+enum PendingActionStatus {
+  PENDING
+  APPROVED
+  CANCELLED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ActionLogCategory {
+  ASSISTANT
+  APPROVAL
+  CALL
+  PRODUCTIVITY
+  SYSTEM
+}
+
+enum ActionImpact {
+  INFO
+  SUCCESS
+  WARNING
+}
+
+enum AssistantRequestStatus {
+  QUEUED
+  PROPOSAL_CREATED
+  NEEDS_CLARIFICATION
+}

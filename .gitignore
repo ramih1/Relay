@@ -1,0 +1,16 @@
+.next/
+node_modules/
+.pnpm-store
+dist
+coverage
+playwright-report/
+test-results/
+.DS_Store
+tsconfig.tsbuildinfo
+.env
+.env.local
+.env*.local
+.data/
+data/relay-state.json
+data/relay-secrets.json
+relay-secrets*
