@@ -89,7 +89,7 @@ export async function runDemoCheck() {
   }
 
   const baseUrl = env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-  const model = env.OLLAMA_MODEL || "qwen3:8b";
+  const model = env.OLLAMA_MODEL || "qwen3:4b";
   try {
     const models = await fetchOllamaModels(baseUrl);
     pass("Ollama connected");
