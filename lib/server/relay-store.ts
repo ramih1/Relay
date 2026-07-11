@@ -1,6 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { buildAssistantCommandPlan } from "@/lib/ai/agent";
+import { classifyCommand } from "@/lib/ai/classify-command";
+import { AIProviderError, getAIUnavailableMessage } from "@/lib/ai/errors";
+import { getOllamaConfig } from "@/lib/ai/ollama-provider";
 import {
   createGoogleCalendarEvent,
   createGoogleGmailDraft,
@@ -20,8 +22,6 @@ import {
 import type {
   ActionLogEntry,
   AssistantRequestEntry,
-  CallRequest,
-  EmailDraft,
   RelayMutationRequest,
   RelayStateSnapshot,
   Note,
@@ -40,7 +40,8 @@ function getRuntimeStatus(): RuntimeStatus {
   return {
     storageMode: "file",
     databaseConfigured: Boolean(process.env.DATABASE_URL),
-    openAiConfigured: Boolean(process.env.OPENAI_API_KEY),
+    ollamaConfigured: Boolean(process.env.OLLAMA_BASE_URL || process.env.OLLAMA_MODEL),
+    ollamaModel: getOllamaConfig().model,
     googleOAuthConfigured: googleWorkspace.googleOAuthConfigured,
     gmailConfigured: googleWorkspace.gmailConfigured,
     calendarConfigured: googleWorkspace.calendarConfigured,
@@ -53,7 +54,8 @@ async function resolveRuntimeStatus(): Promise<RuntimeStatus> {
   return {
     storageMode: "file",
     databaseConfigured: Boolean(process.env.DATABASE_URL),
-    openAiConfigured: Boolean(process.env.OPENAI_API_KEY),
+    ollamaConfigured: Boolean(process.env.OLLAMA_BASE_URL || process.env.OLLAMA_MODEL),
+    ollamaModel: getOllamaConfig().model,
     googleOAuthConfigured: googleWorkspace.googleOAuthConfigured,
     gmailConfigured: googleWorkspace.gmailConfigured,
     calendarConfigured: googleWorkspace.calendarConfigured,
@@ -314,18 +316,40 @@ async function syncCalendarEventIfConfigured(state: RelayStateSnapshot, eventId:
   }
 }
 
-function submitCommand(state: RelayStateSnapshot, rawInput: string) {
+async function submitCommand(state: RelayStateSnapshot, rawInput: string, timezone = process.env.TZ || "America/Toronto") {
   const input = rawInput.trim();
   if (!input) {
     return;
   }
-  const plan = buildAssistantCommandPlan(
-    input,
-    state.preferences,
-    state.profile,
-    state.integrations,
-    buildAssistantContext(state),
-  );
+  let plan;
+  try {
+    plan = await classifyCommand({
+      userMessage: input,
+      currentDate: new Date().toISOString(),
+      timezone,
+      userContext: {
+        ...buildAssistantContext(state),
+        profile: state.profile,
+        preferences: state.preferences,
+      },
+      integrations: state.integrations,
+    });
+  } catch (error) {
+    const message = error instanceof AIProviderError ? error.message : getAIUnavailableMessage();
+    appendFeed(state, message);
+    recordAssistantRequest(state, {
+      input,
+      outcome: message,
+      status: "needs_clarification",
+    });
+    recordEvent(state, {
+      title: "Local AI unavailable",
+      detail: message,
+      category: "system",
+      impact: "warning",
+    });
+    return;
+  }
 
   if (plan.drafts?.length) {
     state.drafts = [...plan.drafts, ...state.drafts];
@@ -534,8 +558,15 @@ export async function resetRelayState() {
   return getRelayState();
 }
 
-export async function submitRelayCommand(input: string) {
-  return applyRelayMutation({ type: "submit_command", input });
+export async function submitRelayCommand(input: string, timezone?: string) {
+  const state = await loadState();
+  if (!state.session.isAuthenticated) {
+    return applyRelayMutation({ type: "submit_command", input });
+  }
+  await submitCommand(state, input, timezone);
+  inMemoryState = state;
+  await persistState(state);
+  return getRelayState();
 }
 
 export async function applyRelayMutation(input: RelayMutationRequest): Promise<RelayStateSnapshot> {
@@ -580,7 +611,7 @@ export async function applyRelayMutation(input: RelayMutationRequest): Promise<R
       return getRelayState();
     }
     case "submit_command":
-      submitCommand(state, input.input);
+      await submitCommand(state, input.input);
       break;
     case "sign_in":
       state.session = {

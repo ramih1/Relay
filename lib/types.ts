@@ -42,7 +42,8 @@ export type SessionState = {
 export type RuntimeStatus = {
   storageMode: "file";
   databaseConfigured: boolean;
-  openAiConfigured: boolean;
+  ollamaConfigured: boolean;
+  ollamaModel: string;
   googleOAuthConfigured: boolean;
   gmailConfigured: boolean;
   calendarConfigured: boolean;

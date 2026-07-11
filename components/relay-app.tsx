@@ -1668,9 +1668,9 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                           detail={runtime.databaseConfigured ? "DATABASE_URL found" : "Add DATABASE_URL to connect Postgres"}
                         />
                         <TaskInsightCard
-                          label="OpenAI"
-                          value={runtime.openAiConfigured ? "configured" : "pending"}
-                          detail={runtime.openAiConfigured ? "OPENAI_API_KEY found" : "Optional for future provider wiring"}
+                          label="Ollama"
+                          value={runtime.ollamaConfigured ? "configured" : "default"}
+                          detail={runtime.ollamaConfigured ? `${runtime.ollamaModel} configured` : `Using local default ${runtime.ollamaModel}`}
                         />
                         <TaskInsightCard
                           label="Google OAuth"
@@ -2187,24 +2187,20 @@ function TaskRow({
       >
         {task.status === "done" ? <Check className="h-4 w-4 text-[var(--bg)]" /> : null}
       </button>
-      <button type="button" className="flex-1 text-left" onClick={onSelect}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className={clsx("text-xl", task.status === "done" ? "text-[var(--accent)]" : "title-main")}>{task.title}</p>
-            <p className="mt-1 text-sm text-muted">{task.due}</p>
-            {task.description ? <p className="copy-soft mt-2 text-sm leading-6">{task.description}</p> : null}
-          </div>
-          <div className="flex items-center gap-2">
-            <StatusPill
-              value={task.status === "overdue" ? "overdue" : task.priority}
-              tone={task.status === "overdue" ? "danger" : task.priority === "medium" ? "warning" : "neutral"}
-            />
-            <button type="button" onClick={onDelete} className="icon-chip h-10 w-10">
-              <Trash2 className="copy-soft h-4 w-4" />
-            </button>
-          </div>
-        </div>
+      <button type="button" className="min-w-0 flex-1 text-left" onClick={onSelect}>
+        <p className={clsx("text-xl", task.status === "done" ? "text-[var(--accent)]" : "title-main")}>{task.title}</p>
+        <p className="mt-1 text-sm text-muted">{task.due}</p>
+        {task.description ? <p className="copy-soft mt-2 text-sm leading-6">{task.description}</p> : null}
       </button>
+      <div className="flex items-center gap-2">
+        <StatusPill
+          value={task.status === "overdue" ? "overdue" : task.priority}
+          tone={task.status === "overdue" ? "danger" : task.priority === "medium" ? "warning" : "neutral"}
+        />
+        <button type="button" onClick={onDelete} className="icon-chip h-10 w-10" aria-label={`Delete ${task.title}`}>
+          <Trash2 className="copy-soft h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

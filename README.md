@@ -20,9 +20,45 @@ Right now the app is fully functional in a file-backed MVP mode:
 - UI: Next.js + React + TypeScript + Tailwind CSS
 - server: Next.js route handlers
 - persistence: local JSON state file under `data/relay-state.json`
-- AI logic: local structured planning logic in `lib/ai/agent.ts`
+- AI provider: local Ollama inference through `lib/ai/ollama-provider.ts`
+- AI safety: Zod-validated proposals routed into the confirmation center
 
 Prisma and PostgreSQL are scaffolded for the next backend step, but the app does not require Postgres to run today.
+
+## Local Demo From GitHub
+
+Relay is designed to be demoed locally from the GitHub repository. No deployment account, hosted database, domain, or paid AI API is required for the demo.
+
+1. Clone the repository and enter the project:
+
+```bash
+git clone https://github.com/98-rami/Relay.git
+cd Relay
+pnpm install
+cp .env.example .env.local
+ollama pull qwen3:8b
+```
+
+2. Start Ollama and leave this terminal open:
+
+```bash
+ollama serve
+```
+
+3. In another terminal, start Relay:
+
+```bash
+cd Relay
+pnpm dev
+```
+
+4. Open `http://localhost:3000` and sign in through the demo workspace gate.
+
+Relay runs entirely on your Mac. Ollama provides the local AI model, and local JSON files store demo data between browser refreshes. Google OAuth can optionally connect Gmail Drafts and Google Calendar; without it, those features stay local-only.
+
+No Vercel deployment, hosted database, or paid AI API is needed. Keep the laptop running, `ollama serve` active, and the Relay development server open during the demo.
+
+The default `qwen3:8b` model is intended for Macs with enough available memory. On an 8 GB Mac, use `ollama pull qwen3:4b` and set `OLLAMA_MODEL="qwen3:4b"` in `.env.local` for interactive demo speed.
 
 ## Quick Start
 
@@ -64,6 +100,9 @@ http://localhost:3000
 pnpm dev
 pnpm build
 pnpm typecheck
+pnpm lint
+pnpm test
+pnpm demo:check
 pnpm prisma:generate
 pnpm prisma:format
 pnpm db:push
@@ -72,13 +111,13 @@ pnpm db:studio
 
 ## Environment Variables
 
-`DATABASE_URL`
-- optional for now
-- used when you want to connect Prisma to a real Postgres database later
+`OLLAMA_BASE_URL`
+- optional
+- defaults to `http://127.0.0.1:11434`
 
-`OPENAI_API_KEY`
-- optional for now
-- reserved for replacing the local assistant planner with a real OpenAI-backed flow
+`OLLAMA_MODEL`
+- optional
+- defaults to `qwen3:8b`
 
 `GOOGLE_CLIENT_ID`
 - required for one-click Google OAuth connect
@@ -90,16 +129,6 @@ pnpm db:studio
 - required for one-click Google OAuth connect
 - should point to your local callback route, for example `http://localhost:3000/api/google/callback`
 
-`GOOGLE_GMAIL_ACCESS_TOKEN`
-- optional
-- when present, approved Relay drafts can be pushed to Gmail using the Gmail drafts API
-- the token needs Gmail compose scope
-
-`GOOGLE_CALENDAR_ACCESS_TOKEN`
-- optional
-- when present, approved or manually created Relay calendar events can be pushed to Google Calendar
-- the token needs Calendar events write access
-
 `GOOGLE_CALENDAR_ID`
 - optional
 - defaults to `primary`
@@ -108,39 +137,28 @@ pnpm db:studio
 - optional
 - defaults to `America/Toronto`
 
-`NEXT_PUBLIC_DATABASE_CONFIGURED`
-- optional UI hint
-- set to `1` if you want the pre-hydration client to show database configured
-
-`NEXT_PUBLIC_OPENAI_CONFIGURED`
-- optional UI hint
-- set to `1` if you want the pre-hydration client to show OpenAI configured
-
 `NEXT_PUBLIC_GOOGLE_OAUTH_CONFIGURED`
 - optional UI hint
-- set to `1` if you want the pre-hydration client to show Google OAuth configured
+- change to `1` after Google OAuth is configured
 
 `NEXT_PUBLIC_GMAIL_CONFIGURED`
 - optional UI hint
-- set to `1` if you want the pre-hydration client to show Gmail configured
+- change to `1` after Google OAuth is configured
 
 `NEXT_PUBLIC_CALENDAR_CONFIGURED`
 - optional UI hint
-- set to `1` if you want the pre-hydration client to show Calendar configured
+- change to `1` after Google OAuth is configured
 
-## If You Want Postgres Next
+## Ollama Setup
 
-Once you have a Postgres database ready:
-
-1. Put the real connection string into `.env.local` as `DATABASE_URL`
-2. Run:
+Relay does not use OpenAI, Anthropic, Gemini, or another paid cloud AI API. Install Ollama, start it, and download the configured model:
 
 ```bash
-pnpm prisma:generate
-pnpm db:push
+ollama pull qwen3:8b
+ollama serve
 ```
 
-3. The Prisma layer will be ready for wiring into the runtime store
+The local health endpoint is available at `/api/ai/health`. If Ollama is unavailable, Relay keeps the workspace data intact and shows setup instructions instead of inventing a proposal.
 
 ## If You Want One-Click Google Connect
 
@@ -163,6 +181,18 @@ NEXT_PUBLIC_GOOGLE_OAUTH_CONFIGURED="1"
 4. Restart `pnpm dev`
 5. Open Settings and click `Connect Google Workspace`
 
+The OAuth tokens are saved only in Relay's ignored local secrets file. Never commit `.env.local`, `data/relay-secrets.json`, or OAuth tokens.
+
+## Demo Readiness Check
+
+Before presenting, run:
+
+```bash
+pnpm demo:check
+```
+
+It verifies dependencies, `.env.local`, writable local storage, the Ollama connection, and the configured model without printing secrets. Google OAuth is optional and produces a warning instead of failing the local demo.
+
 ## Project Map
 
 - `app/` page routes
@@ -172,7 +202,10 @@ NEXT_PUBLIC_GOOGLE_OAUTH_CONFIGURED="1"
 - `lib/data.ts` seeded starter data
 - `lib/server/relay-store.ts` server-side state mutations and persistence
 - `lib/server/relay-insights.ts` dashboard brief and ranking logic
-- `lib/ai/agent.ts` assistant intent parsing and proposal generation
+- `lib/ai/provider.ts` provider abstraction
+- `lib/ai/ollama-provider.ts` server-only Ollama client and health check
+- `lib/ai/schemas.ts` strict proposal schemas
+- `lib/ai/classify-command.ts` command classification and proposal adaptation
 - `prisma/schema.prisma` database schema scaffold
 
 ## Recommended First Demo Flow

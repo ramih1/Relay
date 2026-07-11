@@ -145,7 +145,8 @@ const fallbackState: RelayStateSnapshot = {
   runtime: {
     storageMode: "file",
     databaseConfigured: Boolean(process.env.NEXT_PUBLIC_DATABASE_CONFIGURED),
-    openAiConfigured: Boolean(process.env.NEXT_PUBLIC_OPENAI_CONFIGURED),
+    ollamaConfigured: Boolean(process.env.NEXT_PUBLIC_OLLAMA_CONFIGURED),
+    ollamaModel: process.env.NEXT_PUBLIC_OLLAMA_MODEL || "qwen3:8b",
     googleOAuthConfigured: Boolean(process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CONFIGURED),
     gmailConfigured: Boolean(process.env.NEXT_PUBLIC_GMAIL_CONFIGURED),
     calendarConfigured: Boolean(process.env.NEXT_PUBLIC_CALENDAR_CONFIGURED),
