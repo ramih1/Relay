@@ -1,4 +1,4 @@
-import { commandResultSchema, type CommandResult } from "@/lib/ai/schemas";
+import { commandResultSchema, type CommandResult, type ProposedAction } from "@/lib/ai/schemas";
 import { getAIProvider } from "@/lib/ai/provider";
 import { commandPrompt, relaySystemPrompt } from "@/lib/ai/prompts";
 import type {
@@ -38,6 +38,10 @@ function baseEvent(title: string, detail: string, category: ActionLogEntry["cate
   return { title, detail, category, impact: "info" as const };
 }
 
+export function proposalRisk(actionType: ProposedAction["actionType"]): PendingAction["risk"] {
+  return actionType === "create_call_plan" ? "high" : "medium";
+}
+
 function createPlanFromResult(
   input: string,
   result: CommandResult,
@@ -67,7 +71,7 @@ function createPlanFromResult(
     type,
     title,
     description,
-    risk: proposal.riskLevel,
+    risk: proposalRisk(proposal.actionType),
     status: "pending",
     payload,
   });
@@ -101,6 +105,15 @@ function createPlanFromResult(
           repeat: payload.repeatRule,
           priority: payload.priority,
         })],
+      };
+    }
+    case "create_tasks_from_note": {
+      const payload = proposal.payload;
+      return {
+        feedMessage: proposal.reasoningSummary ?? `Extracted ${payload.tasks.length} task proposals from ${payload.noteTitle}. They are waiting in Confirmations.`,
+        request: { input, outcome: "Created task proposals from the latest note for review.", status: "proposal_created" },
+        event: baseEvent("Tasks extracted from note", payload.noteTitle),
+        pendingActions: [pendingAction("create_tasks_from_note", proposal.title, proposal.description, { tasks: payload.tasks })],
       };
     }
     case "draft_email": {
