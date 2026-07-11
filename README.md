@@ -36,7 +36,7 @@ git clone https://github.com/98-rami/Relay.git
 cd Relay
 pnpm install
 cp .env.example .env.local
-ollama pull qwen3:8b
+ollama pull qwen3:4b
 ```
 
 2. Start Ollama and leave this terminal open:
@@ -58,7 +58,7 @@ Relay runs entirely on your Mac. Ollama provides the local AI model, and local J
 
 No Vercel deployment, hosted database, or paid AI API is needed. Keep the laptop running, `ollama serve` active, and the Relay development server open during the demo.
 
-The default `qwen3:8b` model is intended for Macs with enough available memory. On an 8 GB Mac, use `ollama pull qwen3:4b` and set `OLLAMA_MODEL="qwen3:4b"` in `.env.local` for interactive demo speed.
+The default `qwen3:4b` model is chosen for reliable local use on 8 GB Macs. You can select a different installed Ollama model by changing `OLLAMA_MODEL` in `.env.local`.
 
 ## Quick Start
 
@@ -117,7 +117,7 @@ pnpm db:studio
 
 `OLLAMA_MODEL`
 - optional
-- defaults to `qwen3:8b`
+- defaults to `qwen3:4b`
 
 `GOOGLE_CLIENT_ID`
 - required for one-click Google OAuth connect
@@ -154,7 +154,7 @@ pnpm db:studio
 Relay does not use OpenAI, Anthropic, Gemini, or another paid cloud AI API. Install Ollama, start it, and download the configured model:
 
 ```bash
-ollama pull qwen3:8b
+ollama pull qwen3:4b
 ollama serve
 ```
 
