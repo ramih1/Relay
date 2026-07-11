@@ -25,7 +25,7 @@ import {
   SunMedium,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type {
   CalendarEvent,
   DashboardInsightSnapshot,
@@ -104,7 +104,6 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     drafts,
     calls,
     pendingActions,
-    assistantFeed,
     assistantRequests,
     actionLog,
     preferences,
@@ -175,6 +174,9 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
   const [noteTagFilter, setNoteTagFilter] = useState("all");
   const [reminderFilter, setReminderFilter] = useState<ReminderFilter>("all");
   const [reminderQuery, setReminderQuery] = useState("");
+  const deferredTaskQuery = useDeferredValue(taskQuery);
+  const deferredNoteQuery = useDeferredValue(noteQuery);
+  const deferredReminderQuery = useDeferredValue(reminderQuery);
   const [insights, setInsights] = useState<DashboardInsightSnapshot | null>(null);
   const [isRefreshingInsights, setIsRefreshingInsights] = useState(false);
   const [profileDraft, setProfileDraft] = useState({
@@ -315,7 +317,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
 
   const visibleTasks = useMemo(() => {
     const scoped = taskFilter === "all" ? tasks : taskGroups[taskFilter];
-    const query = taskQuery.trim().toLowerCase();
+    const query = deferredTaskQuery.trim().toLowerCase();
     if (!query) {
       return scoped;
     }
@@ -325,10 +327,10 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
         value.toLowerCase().includes(query),
       ),
     );
-  }, [taskFilter, taskGroups, taskQuery, tasks]);
+  }, [deferredTaskQuery, taskFilter, taskGroups, tasks]);
 
   const visibleNotes = useMemo(() => {
-    const query = noteQuery.trim().toLowerCase();
+    const query = deferredNoteQuery.trim().toLowerCase();
     return notes.filter((note) => {
       const matchesTag = noteTagFilter === "all" || note.tags.includes(noteTagFilter);
       const matchesQuery =
@@ -338,7 +340,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
         );
       return matchesTag && matchesQuery;
     });
-  }, [noteQuery, noteTagFilter, notes]);
+  }, [deferredNoteQuery, noteTagFilter, notes]);
 
   const reminderGroups = useMemo(
     () => ({
@@ -352,7 +354,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
 
   const visibleReminders = useMemo(() => {
     const scoped = reminderGroups[reminderFilter];
-    const query = reminderQuery.trim().toLowerCase();
+    const query = deferredReminderQuery.trim().toLowerCase();
     if (!query) {
       return scoped;
     }
@@ -362,7 +364,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
         value.toLowerCase().includes(query),
       ),
     );
-  }, [reminderFilter, reminderGroups, reminderQuery]);
+  }, [deferredReminderQuery, reminderFilter, reminderGroups]);
 
   const fallbackFocus = useMemo(() => {
     if (overdueCount > 0) {
@@ -549,36 +551,6 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadInsights() {
-      try {
-        setIsRefreshingInsights(true);
-        const response = await fetch("/api/insights", { cache: "no-store" });
-        if (!response.ok) {
-          return;
-        }
-        const next = (await response.json()) as DashboardInsightSnapshot;
-        if (!cancelled) {
-          setInsights(next);
-        }
-      } catch {
-        // Keep fallback content if the backend insights route is unavailable.
-      } finally {
-        if (!cancelled) {
-          setIsRefreshingInsights(false);
-        }
-      }
-    }
-
-    void loadInsights();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [assistantFeed.length, pendingActions.length, reminders.length, tasks.length, drafts.length, calls.length]);
-
   if (isHydrating) {
     return <WorkspaceSplash />;
   }
@@ -590,10 +562,11 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
   return (
     <main className="min-h-screen bg-bg pb-24 text-text lg:pb-0">
       <div className="relative overflow-hidden">
+        <div className="ambient-aurora" aria-hidden="true" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(86,211,208,0.08),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(226,190,125,0.07),_transparent_16%),radial-gradient(circle_at_center,_rgba(255,255,255,0.02),_transparent_28%)]" />
         <div className="mx-auto max-w-[1560px] px-4 py-4 sm:px-6 lg:px-8">
           <div className="relay-shell flex min-h-[calc(100vh-2rem)] flex-col overflow-hidden lg:flex-row">
-            <aside className="flex w-full shrink-0 flex-col border-b border-white/6 px-5 py-6 lg:w-[276px] lg:border-b-0 lg:border-r lg:px-4">
+            <aside className="relay-sidebar flex w-full shrink-0 flex-col border-b border-white/6 px-5 py-6 lg:w-[224px] lg:border-b-0 lg:border-r lg:px-4">
               <div className="flex items-start justify-between">
                 <RelayBrand />
                 <button type="button" className="icon-chip mt-2 hidden lg:inline-flex">
@@ -659,6 +632,12 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
 
               {section === "dashboard" ? (
                 <>
+                  <div className="dashboard-metrics">
+                    <MetricCard label="Today" value={String(sortedCalendarEvents.length)} detail="Scheduled moments" />
+                    <MetricCard label="Open tasks" value={String(tasks.filter((task) => task.status !== "done").length)} detail={`${highPriorityTasks.length} high priority`} />
+                    <MetricCard label="Approvals" value={String(pendingCount)} detail="Waiting for you" />
+                    <MetricCard label="Relay AI" value="Online" detail={runtime.ollamaModel} />
+                  </div>
                   <div className="mt-5 grid gap-4 xl:grid-cols-[1.7fr_0.95fr]">
                     <section className="hero-panel">
                       <div className="flex items-start justify-between gap-4">
@@ -751,7 +730,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
 
                     <DashboardPanel title="Confirmations Queue" actionLabel={`View all (${pendingApprovals.length})`} href="/confirmations">
                       <div className="space-y-3">
-                        {pendingApprovals.slice(0, 4).map((action) => (
+                        {pendingApprovals.slice(0, 3).map((action) => (
                           <ConfirmationRow
                             key={action.id}
                             action={action}
@@ -776,7 +755,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                     </DashboardPanel>
                   </div>
 
-                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                  <div className="dashboard-secondary mt-4 grid gap-4 xl:grid-cols-3">
                     <DashboardPanel title="Notes Preview" actionLabel="Open notes" href="/notes">
                       {notesPreview ? <NotePreviewCard note={notesPreview} /> : null}
                     </DashboardPanel>
@@ -840,7 +819,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                     </DashboardPanel>
                   </div>
 
-                  <div className="mt-4">
+                  <div className="dashboard-secondary mt-4">
                     <DashboardPanel title="Quick Actions">
                       <div className="grid gap-3 md:grid-cols-3">
                         {quickActions.map((action) => (
@@ -871,7 +850,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                     </DashboardPanel>
                   </div>
 
-                  <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                  <div className="dashboard-secondary mt-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
                     <DashboardPanel title="Recent Activity Lane" actionLabel="Open assistant" href="/assistant">
                       {recentActivity.length > 0 ? (
                         <div className="space-y-3">
@@ -903,7 +882,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                     </div>
                   </div>
 
-                  <div className="mt-4 feature-panel">
+                  <div className="dashboard-secondary mt-4 feature-panel">
                     <div className="mb-4 flex items-center justify-between">
                       <p className="eyebrow">Assistant Requests</p>
                       <Link href="/assistant" className="panel-link">
@@ -1918,7 +1897,7 @@ function TopCommandBar({
 
         <div className="min-w-0 flex-1">
           <p className="title-soft text-base">What would you like Relay to do?</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="command-samples mt-2 flex flex-wrap gap-2">
             {commandSamples.slice(0, 2).map((sample) => (
               <button key={sample} type="button" onClick={() => setCommand(sample)} className="rounded-full border border-[color:color-mix(in_srgb,var(--surface-outline)_55%,transparent_45%)] px-3 py-1.5 text-sm text-muted transition hover:border-[color:color-mix(in_srgb,var(--warn)_40%,transparent_60%)] hover:text-[var(--title)]">
                 {sample}
@@ -1993,7 +1972,7 @@ function SectionPage({
     <div className="mt-5">
       <section className="hero-panel">
         <p className="eyebrow">{eyebrow}</p>
-        <h1 className="title-hero mt-5 max-w-[760px] font-display text-[2.8rem] leading-[1.05] sm:text-[3.6rem]">
+        <h1 className="section-title title-hero mt-5 max-w-[760px] font-display text-[2.8rem] leading-[1.05] sm:text-[3.6rem]">
           {title}
         </h1>
         <p className="copy-strong mt-4 max-w-[720px] text-lg leading-8">{description}</p>
