@@ -3,20 +3,20 @@
 @tailwind utilities;
 
 :root {
-  --bg: #030714;
-  --bg-radial-a: rgba(37, 99, 235, 0.18);
-  --bg-radial-b: rgba(14, 165, 233, 0.1);
-  --panel: rgba(5, 11, 28, 0.96);
-  --panel-alt: rgba(9, 18, 43, 0.94);
-  --line: rgba(80, 132, 255, 0.22);
+  --bg: #07091f;
+  --bg-radial-a: rgba(91, 61, 255, 0.24);
+  --bg-radial-b: rgba(44, 92, 255, 0.16);
+  --panel: rgba(5, 8, 30, 0.97);
+  --panel-alt: rgba(14, 19, 58, 0.95);
+  --line: rgba(111, 83, 255, 0.25);
   --text: #eaf2ff;
   --muted: #8292ae;
-  --accent: #3b82f6;
-  --accent-soft: rgba(59, 130, 246, 0.16);
-  --warn: #60a5fa;
-  --success: #38bdf8;
+  --accent: #7654ff;
+  --accent-soft: rgba(118, 84, 255, 0.18);
+  --warn: #8aa4ff;
+  --success: #20d6b5;
   --surface-soft: rgba(255, 255, 255, 0.03);
-  --surface-outline: rgba(86, 135, 255, 0.22);
+  --surface-outline: rgba(116, 94, 255, 0.24);
   --chip-text: #dbeafe;
   --brand-wordmark: #f1f6ff;
   --brand-subtitle: #60a5fa;
@@ -162,7 +162,7 @@ select {
 
 .relay-shell {
   border: 1px solid color-mix(in srgb, var(--surface-outline) 100%, transparent 0%);
-  border-radius: 1.35rem;
+  border-radius: 1.5rem;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 100%, transparent 0%), color-mix(in srgb, var(--panel-alt) 100%, transparent 0%)),
     radial-gradient(circle at top, color-mix(in srgb, var(--accent) 10%, transparent 90%), transparent 30%);
@@ -678,48 +678,7 @@ select {
   border: 0;
 }
 
-.orbital-art {
-  pointer-events: none;
-  position: absolute;
-  right: 3rem;
-  top: 2.75rem;
-  height: 15rem;
-  width: 15rem;
-  opacity: 0.78;
-}
-
-.orbital-art span {
-  position: absolute;
-  inset: 0;
-  border: 1px solid rgba(180, 146, 88, 0.2);
-  border-radius: 50%;
-  transform: rotate(18deg);
-}
-
-.orbital-art span:nth-child(2) {
-  inset: 1.1rem;
-}
-
-.orbital-art span:nth-child(3) {
-  inset: 2.2rem;
-}
-
-.orbital-art span:nth-child(4) {
-  inset: 3.3rem;
-}
-
-.orbital-art span:nth-child(5) {
-  inset: 4.6rem;
-  background: radial-gradient(circle, rgba(232, 193, 130, 0.95), rgba(232, 193, 130, 0.04) 38%, transparent 45%);
-}
-
-@media (max-width: 1024px) {
-  .orbital-art {
-    display: none;
-  }
-}
-
-/* Electric-blue command center */
+/* Vision-inspired command center */
 .ambient-aurora {
   pointer-events: none;
   position: fixed;
@@ -737,17 +696,34 @@ select {
 }
 
 .relay-sidebar {
-  background: color-mix(in srgb, var(--panel) 88%, transparent 12%);
+  background: linear-gradient(180deg, rgba(4, 7, 27, 0.99), rgba(6, 9, 35, 0.97));
+  --brand-wordmark: #f1f6ff;
+  --brand-subtitle: #60a5fa;
 }
 
 .relay-sidebar .nav-item {
   border-radius: 0.8rem;
   padding: 0.72rem 0.8rem;
+  color: #aab8d2;
   font-size: 0.88rem;
 }
 
+.relay-sidebar .nav-item:hover,
 .relay-sidebar .nav-item.active {
-  box-shadow: inset 3px 0 0 var(--accent), 0 8px 28px rgba(37, 99, 235, 0.1);
+  color: #f5f8ff;
+}
+
+.relay-sidebar .nav-item-icon {
+  color: #8292ae;
+}
+
+.relay-sidebar .nav-item.active .nav-item-icon {
+  color: #a98fff;
+}
+
+.relay-sidebar .nav-item.active {
+  background: linear-gradient(100deg, rgba(118, 84, 255, 0.3), rgba(69, 77, 138, 0.24));
+  box-shadow: inset 3px 0 0 #8a68ff, 0 8px 28px rgba(74, 55, 255, 0.16);
 }
 
 .command-bar,
@@ -786,32 +762,57 @@ select {
 .dashboard-metrics > * {
   min-height: 7.3rem;
   border-radius: 0.95rem;
-  background: linear-gradient(145deg, rgba(16, 33, 70, 0.78), rgba(5, 12, 30, 0.88));
+  background: linear-gradient(145deg, rgba(16, 22, 64, 0.94), rgba(5, 8, 30, 0.98));
   animation: panel-enter 480ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+
+.vision-hero {
+  min-height: 19rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background-image:
+    linear-gradient(90deg, rgba(4, 7, 27, 0.98) 0%, rgba(4, 7, 27, 0.86) 39%, rgba(4, 7, 27, 0.18) 74%),
+    url("/images/relay-neural-wave.jpg");
+  background-position: center;
+  background-size: cover;
+  border-color: rgba(123, 95, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 20px 55px rgba(0, 0, 0, 0.2);
+}
+
+.voice-input-button {
+  display: inline-flex;
+  min-height: 2.85rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent 65%);
+  border-radius: 0.95rem;
+  background: var(--accent-soft);
+  padding: 0 0.85rem;
+  color: var(--title);
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.voice-input-button:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--accent) 25%, transparent 75%);
+}
+
+.voice-input-button.listening {
+  background: color-mix(in srgb, var(--danger) 20%, transparent 80%);
+  border-color: color-mix(in srgb, var(--danger) 50%, transparent 50%);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--danger) 22%, transparent 78%);
+}
+
+.voice-input-label {
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .dashboard-metrics > *:nth-child(2) { animation-delay: 55ms; }
 .dashboard-metrics > *:nth-child(3) { animation-delay: 110ms; }
 .dashboard-metrics > *:nth-child(4) { animation-delay: 165ms; }
-
-.dashboard-secondary {
-  display: none;
-}
-
-.orbital-art {
-  opacity: 0.88;
-  animation: relay-float 7s ease-in-out infinite alternate;
-  will-change: transform;
-}
-
-.orbital-art span {
-  border-color: color-mix(in srgb, var(--accent) 32%, transparent 68%);
-}
-
-.orbital-art span:nth-child(5) {
-  background: radial-gradient(circle, #93c5fd, color-mix(in srgb, var(--accent) 38%, transparent 62%) 38%, transparent 46%);
-  box-shadow: 0 0 44px color-mix(in srgb, var(--accent) 50%, transparent 50%);
-}
 
 .accent-orb {
   animation: relay-pulse 3.8s ease-in-out infinite;
@@ -868,9 +869,14 @@ select {
   .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero-panel { min-height: auto; }
   .ambient-aurora { left: -24rem; width: 58rem; }
-  .command-bar { align-items: center; padding: 0.8rem; }
+  .command-bar { align-items: center; gap: 0.6rem; padding: 0.7rem; }
+  .command-prompt { display: none; }
+  .command-input { margin-top: 0; min-height: 2.85rem; }
   .command-samples { display: none; }
   .section-title { font-size: 2.35rem; line-height: 1.04; }
+  .vision-hero { background-position: 58% center; }
+  .voice-input-button { width: 2.85rem; padding: 0; }
+  .voice-input-label { display: none; }
 }
 
 @media (max-width: 1023px) {

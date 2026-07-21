@@ -11,6 +11,6 @@ export class AIProviderError extends Error {
   }
 }
 
-export function getAIUnavailableMessage(model = process.env.OLLAMA_MODEL || "qwen3:4b") {
+export function getAIUnavailableMessage(model = process.env.OLLAMA_MODEL || "qwen3:1.7b") {
   return `Relay could not connect to Ollama. Make sure Ollama is installed and running, then run: ollama serve && ollama pull ${model}`;
 }

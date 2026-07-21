@@ -2,7 +2,6 @@ import type {
   ActionLogEntry,
   AssistantRequestEntry,
   CalendarEvent,
-  CallRequest,
   EmailDraft,
   NotificationItem,
   Note,
@@ -20,7 +19,6 @@ type AssistantCommandPlan = {
   event: Omit<ActionLogEntry, "id" | "happenedAt">;
   pendingActions?: PendingAction[];
   drafts?: EmailDraft[];
-  calls?: CallRequest[];
 };
 
 type AssistantCommandContext = {
@@ -47,7 +45,6 @@ const defaultProfile: UserProfile = {
 const defaultIntegrations: IntegrationState = {
   calendar: true,
   emailDrafts: true,
-  callAssistant: true,
   shareContextWithAi: true,
 };
 
@@ -114,7 +111,7 @@ function inferPriority(input: string): Task["priority"] | Reminder["priority"] {
     return "high";
   }
 
-  if (/(meeting|email|team|gym|class|call)/i.test(input)) {
+  if (/(meeting|email|team|gym|class)/i.test(input)) {
     return "medium";
   }
 
@@ -438,66 +435,6 @@ function buildEmailPlan(
   };
 }
 
-function inferCallContact(input: string) {
-  const match = input.match(/\bcall\s+(?:the\s+|my\s+)?(.+?)(?:\s+and\s+ask|\s+about|\s*$)/i);
-  return titleCase(match?.[1]?.trim() || "Campus Gym");
-}
-
-function buildCallPlan(
-  rawInput: string,
-  preferences: UserPreferences,
-  profile: UserProfile,
-): AssistantCommandPlan {
-  const input = cleanText(rawInput);
-  const contactName = inferCallContact(input);
-  const purposeMatch = input.match(/\bask\s+if\s+(.+)$/i);
-  const purpose = purposeMatch
-    ? `Ask if ${purposeMatch[1].trim().replace(/\?+$/, "")}`
-    : "Ask for availability and any restrictions";
-  const callId = crypto.randomUUID();
-
-  const call: CallRequest = {
-    id: callId,
-    contactName,
-    phoneNumber: "(555) 210-1184",
-    purpose,
-    script: `Hi, I'm Relay, an AI assistant calling on behalf of ${profile.name}, a ${profile.role.toLowerCase()}. I'm calling ${contactName} to ${purpose.toLowerCase()}.`,
-    allowedActions: ["Ask clarifying questions", "Confirm availability", "Ask operating hours"],
-    restrictedActions: ["Do not book anything", "Do not share private details"],
-    status: "pending",
-  };
-
-  const action: PendingAction = {
-    id: crypto.randomUUID(),
-    type: "place_call",
-    title: `Call ${contactName}`,
-    description: purpose,
-    risk: "high",
-    status: "pending",
-    payload: { callId },
-  };
-
-  return {
-    feedMessage: withTone(
-      "Created a transparent call plan with allowed and restricted actions. It is waiting for approval.",
-      preferences.assistantTone,
-    ),
-    request: {
-      input,
-      outcome: "Prepared a call plan with approval requirements.",
-      status: "proposal_created",
-    },
-    event: {
-      title: "Call plan prepared",
-      detail: `${contactName} • ${purpose}`,
-      category: "call",
-      impact: "warning",
-    },
-    calls: [call],
-    pendingActions: [action],
-  };
-}
-
 function buildTaskExtractionPlan(rawInput: string, preferences: UserPreferences): AssistantCommandPlan {
   const input = cleanText(rawInput);
   const tasks = [
@@ -561,7 +498,7 @@ function buildClarificationPlan(rawInput: string, preferences: UserPreferences):
 function buildIntegrationBlockedPlan(
   rawInput: string,
   preferences: UserPreferences,
-  capability: "email drafts" | "call assistant",
+  capability: "email drafts",
 ): AssistantCommandPlan {
   const input = cleanText(rawInput);
 
@@ -608,14 +545,6 @@ export function buildAssistantCommandPlan(
     }
 
     return buildEmailPlan(input, preferences, profile);
-  }
-
-  if (/\bcall\b/i.test(lower)) {
-    if (!integrations.callAssistant) {
-      return buildIntegrationBlockedPlan(input, preferences, "call assistant");
-    }
-
-    return buildCallPlan(input, preferences, profile);
   }
 
   if (/(turn this note into tasks|extract tasks|action items|tasks from note)/i.test(lower)) {

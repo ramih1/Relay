@@ -17,7 +17,6 @@ model User {
   calendarEvents CalendarEvent[]
   notifications  Notification[]
   emailDrafts    EmailDraft[]
-  callRequests   CallRequest[]
   pendingActions PendingAction[]
   actionLogs     ActionLog[]
   assistantRuns  AssistantRequest[]
@@ -114,25 +113,6 @@ model EmailDraft {
   @@index([userId, status])
 }
 
-model CallRequest {
-  id                String     @id @default(uuid())
-  userId            String
-  contactName       String
-  phoneNumber       String
-  purpose           String
-  script            String
-  allowedActions    String[]
-  restrictedActions String[]
-  status            CallStatus @default(PENDING)
-  transcript        String?
-  summary           String?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, status])
-}
-
 model PendingAction {
   id          String              @id @default(uuid())
   userId      String
@@ -224,19 +204,11 @@ enum EmailDraftStatus {
   APPROVED
 }
 
-enum CallStatus {
-  PENDING
-  APPROVED
-  SIMULATED
-}
-
 enum PendingActionType {
   CREATE_REMINDER
   CREATE_TASK
   DRAFT_EMAIL
   CREATE_TASKS_FROM_NOTE
-  PLACE_CALL
-  CREATE_FOLLOWUP_TASK
 }
 
 enum PendingActionStatus {
@@ -254,7 +226,6 @@ enum RiskLevel {
 enum ActionLogCategory {
   ASSISTANT
   APPROVAL
-  CALL
   PRODUCTIVITY
   SYSTEM
 }

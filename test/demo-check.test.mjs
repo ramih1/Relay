@@ -8,15 +8,15 @@ import {
 } from "../scripts/demo-check.mjs";
 
 test("parseEnv handles quoted values and comments", () => {
-  assert.deepEqual(parseEnv('OLLAMA_MODEL="qwen3:4b"\n# ignored\nEMPTY=""\n'), {
-    OLLAMA_MODEL: "qwen3:4b",
+  assert.deepEqual(parseEnv('OLLAMA_MODEL="qwen3:1.7b"\n# ignored\nEMPTY=""\n'), {
+    OLLAMA_MODEL: "qwen3:1.7b",
     EMPTY: "",
   });
 });
 
 test("findConfiguredModel accepts Ollama's tagged model name", () => {
-  assert.equal(findConfiguredModel([{ name: "qwen3:4b" }], "qwen3:4b"), true);
-  assert.equal(findConfiguredModel([{ name: "qwen3:latest" }], "qwen3:4b"), false);
+  assert.equal(findConfiguredModel([{ name: "qwen3:1.7b" }], "qwen3:1.7b"), true);
+  assert.equal(findConfiguredModel([{ name: "qwen3:latest" }], "qwen3:1.7b"), false);
 });
 
 test("Google OAuth is optional when all credentials are absent", () => {

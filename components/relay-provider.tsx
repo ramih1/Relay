@@ -3,7 +3,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   initialCalendarEvents,
-  initialCalls,
   initialEmailDrafts,
   initialNotes,
   initialNotifications,
@@ -64,7 +63,6 @@ type RelayStore = {
   calendarEvents: CalendarEvent[];
   notifications: NotificationItem[];
   drafts: EmailDraft[];
-  calls: RelayStateSnapshot["calls"];
   pendingActions: PendingAction[];
   assistantFeed: string[];
   assistantRequests: AssistantRequestEntry[];
@@ -101,7 +99,6 @@ type RelayStore = {
   deleteDraft: (draftId: string) => Promise<void>;
   summarizeNote: (noteId: string) => Promise<void>;
   suggestNoteTags: (noteId: string) => Promise<void>;
-  createCallFollowups: (callId: string) => Promise<void>;
   updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   updateIntegrations: (updates: Partial<IntegrationState>) => Promise<void>;
@@ -115,10 +112,9 @@ const fallbackState: RelayStateSnapshot = {
   calendarEvents: initialCalendarEvents,
   notifications: initialNotifications,
   drafts: initialEmailDrafts,
-  calls: initialCalls,
   pendingActions: initialPendingActions,
   assistantFeed: [
-    "I can prepare reminders, email drafts, note summaries, and simulated call plans. Important actions always wait for your approval.",
+    "I can prepare tasks, reminders, email drafts, note summaries, and calendar plans. Important actions always wait for your approval.",
   ],
   assistantRequests: [],
   actionLog: [],
@@ -136,7 +132,6 @@ const fallbackState: RelayStateSnapshot = {
   integrations: {
     calendar: true,
     emailDrafts: true,
-    callAssistant: true,
     shareContextWithAi: true,
   },
   session: {
@@ -146,7 +141,7 @@ const fallbackState: RelayStateSnapshot = {
     storageMode: "file",
     databaseConfigured: Boolean(process.env.NEXT_PUBLIC_DATABASE_CONFIGURED),
     ollamaConfigured: Boolean(process.env.NEXT_PUBLIC_OLLAMA_CONFIGURED),
-    ollamaModel: process.env.NEXT_PUBLIC_OLLAMA_MODEL || "qwen3:4b",
+    ollamaModel: process.env.NEXT_PUBLIC_OLLAMA_MODEL || "qwen3:1.7b",
     googleOAuthConfigured: Boolean(process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CONFIGURED),
     gmailConfigured: Boolean(process.env.NEXT_PUBLIC_GMAIL_CONFIGURED),
     calendarConfigured: Boolean(process.env.NEXT_PUBLIC_CALENDAR_CONFIGURED),
@@ -270,7 +265,6 @@ export function RelayProvider({ children }: { children: ReactNode }) {
       deleteDraft: async (draftId) => mutate({ type: "delete_draft", draftId }),
       summarizeNote: async (noteId) => mutate({ type: "summarize_note", noteId }),
       suggestNoteTags: async (noteId) => mutate({ type: "suggest_note_tags", noteId }),
-      createCallFollowups: async (callId) => mutate({ type: "create_call_followups", callId }),
       updatePreferences: async (updates) => mutate({ type: "update_preferences", updates }),
       updateProfile: async (updates) => mutate({ type: "update_profile", updates }),
       updateIntegrations: async (updates) => mutate({ type: "update_integrations", updates }),
