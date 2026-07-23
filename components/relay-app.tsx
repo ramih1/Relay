@@ -9,17 +9,14 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
-  ChevronRight,
   ClipboardList,
   Clock3,
   Palette,
   Home,
-  Mail,
   MoonStar,
   Search,
   Send,
   Settings,
-  Sparkles,
   StickyNote,
   SunMedium,
   Trash2,
@@ -39,6 +36,7 @@ import type {
 } from "@/lib/types";
 import { useRelay } from "@/components/relay-provider";
 import { VoiceInputButton } from "@/components/assistant/voice-input-button";
+import { VisionDashboard } from "@/components/dashboard/vision-dashboard";
 
 const navItems: { key: NavKey; label: string; href: string; icon: ComponentType<{ className?: string }> }[] = [
   { key: "dashboard", label: "Dashboard", href: "/", icon: Home },
@@ -466,18 +464,15 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
   }
 
   return (
-    <main className="min-h-screen bg-bg pb-24 text-text lg:pb-0">
-      <div className="relative overflow-hidden">
+    <main className="vision-app min-h-screen bg-bg pb-24 text-text lg:pb-0">
+      <div className="vision-app-background relative overflow-hidden">
         <div className="ambient-aurora" aria-hidden="true" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(86,211,208,0.08),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(226,190,125,0.07),_transparent_16%),radial-gradient(circle_at_center,_rgba(255,255,255,0.02),_transparent_28%)]" />
-        <div className="mx-auto max-w-[1560px] px-4 py-4 sm:px-6 lg:px-8">
+        <div className="vision-app-frame mx-auto max-w-[1800px] px-4 py-4 sm:px-6">
           <div className="relay-shell flex min-h-[calc(100vh-2rem)] flex-col overflow-hidden lg:flex-row">
-            <aside className="relay-sidebar flex w-full shrink-0 flex-col border-b border-white/6 px-5 py-6 lg:w-[224px] lg:border-b-0 lg:border-r lg:px-4">
-              <div className="flex items-start justify-between">
+            <aside className="relay-sidebar flex w-full shrink-0 flex-col border-b border-white/6 px-5 py-6 lg:w-[276px] lg:border-b-0 lg:px-5">
+              <div className="vision-sidebar-brand">
                 <RelayBrand />
-                <button type="button" className="icon-chip mt-2 hidden lg:inline-flex">
-                  <ChevronRight className="h-4 w-4 rotate-180" />
-                </button>
               </div>
 
               <nav className="mt-8 space-y-2">
@@ -527,132 +522,33 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
               </div>
             </aside>
 
-            <section className="relative flex flex-1 flex-col px-5 py-5 lg:px-6">
+            <section className="vision-main-panel relative flex min-w-0 flex-1 flex-col px-5 py-5 lg:px-7">
               <ThemeRail theme={theme} onThemeChange={handleThemeChange} />
               {lastError ? (
                 <div className="mb-4 rounded-[1rem] border border-[color:color-mix(in_srgb,var(--danger)_32%,transparent_68%)] bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--title)]">
                   {lastError}
                 </div>
               ) : null}
-              <TopCommandBar command={command} setCommand={setCommand} submitCommand={handleSubmitCommand} />
+              <TopCommandBar section={section} command={command} setCommand={setCommand} submitCommand={handleSubmitCommand} />
 
               {section === "dashboard" ? (
-                <>
-                  <div className="dashboard-metrics">
-                    <MetricCard label="Today" value={String(sortedCalendarEvents.length)} detail="Scheduled moments" />
-                    <MetricCard label="Open tasks" value={String(tasks.filter((task) => task.status !== "done").length)} detail={`${highPriorityTasks.length} high priority`} />
-                    <MetricCard label="Approvals" value={String(pendingCount)} detail="Waiting for you" />
-                    <MetricCard label="Relay AI" value="Online" detail={runtime.ollamaModel} />
-                  </div>
-                  <div className="mt-5 grid gap-4 xl:grid-cols-[1.7fr_0.95fr]">
-                    <section className="vision-hero hero-panel">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="eyebrow">Today Brief</p>
-                          <h1 className="title-hero mt-5 font-display text-[3rem] leading-[1.02] sm:text-[4rem]">
-                            Good morning, {profile.name}.
-                          </h1>
-                          <p className="copy-strong mt-4 max-w-[620px] text-xl leading-9">{insights?.dailyBrief ?? fallbackBrief}</p>
-                        </div>
-                        <button
-                          type="button"
-                          className="soft-outline hidden lg:inline-flex"
-                          onClick={() => void refreshInsights()}
-                          disabled={isRefreshingInsights}
-                        >
-                          {isRefreshingInsights ? "Refreshing brief..." : "Refresh brief"}
-                        </button>
-                      </div>
-
-                      <div className="mt-8 grid gap-3 md:grid-cols-3">
-                        <StatChip icon={Bell} value={activeReminderCount} label="Reminders" tone="teal" />
-                        <StatChip icon={Clock3} value={overdueCount} label="Overdue Task" tone="rose" />
-                        <StatChip icon={Mail} value={pendingDraftCount} label="Email Draft" tone="gold" />
-                      </div>
-                      <div className="focus-block mt-5 px-4 py-4">
-                        <p className="accent-copy text-sm uppercase tracking-[0.2em]">Focus suggestion</p>
-                        <p className="copy-strong mt-2 text-sm leading-7">{insights?.focusMessage ?? fallbackFocus}</p>
-                      </div>
-                    </section>
-
-                    <section className="feature-panel">
-                      <div className="mb-6 flex items-center justify-between">
-                        <p className="eyebrow">Schedule</p>
-                        <Link href="/calendar" className="panel-link">
-                          View Calendar
-                        </Link>
-                      </div>
-
-                      <div className="space-y-6">
-                        {sortedCalendarEvents.map((item, index) => (
-                          <div key={`${item.start}-${item.title}`} className="flex gap-4">
-                            <div className="flex flex-col items-center">
-                              <span className="h-3 w-3 rounded-full border border-white/90 bg-transparent" />
-                              {index < sortedCalendarEvents.length - 1 ? <span className="mt-2 h-full w-px bg-white/10" /> : null}
-                            </div>
-                            <div className="copy-strong min-w-[78px] text-sm">{formatScheduleTime(item.start)}</div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3">
-                                <span
-                                  className={clsx(
-                                    "h-2.5 w-2.5 rounded-full",
-                                    item.tone === "teal" ? "bg-[#56d3d0]" : item.tone === "gold" ? "bg-[#ddb26f]" : "bg-[#f2808e]",
-                                  )}
-                                />
-                                <p className="title-main text-xl">{item.title}</p>
-                              </div>
-                              <p className="mt-1 text-sm text-muted">{item.detail}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
-                    <DashboardPanel title="Priority Tasks" actionLabel="View all" href="/tasks">
-                        <div className="space-y-4">
-                          {tasks.slice(0, 4).map((task) => (
-                            <TaskRow
-                              key={task.id}
-                              task={task}
-                              active={selectedTask?.id === task.id}
-                              onSelect={() => setSelectedTaskId(task.id)}
-                              onToggle={() => toggleTask(task.id)}
-                              onDelete={() => deleteTask(task.id)}
-                            />
-                          ))}
-                        </div>
-                    </DashboardPanel>
-
-                    <DashboardPanel title="Confirmations Queue" actionLabel={`View all (${pendingApprovals.length})`} href="/confirmations">
-                      <div className="space-y-3">
-                        {pendingApprovals.slice(0, 3).map((action) => (
-                          <ConfirmationRow
-                            key={action.id}
-                            action={action}
-                            onApprove={() => approveAction(action.id)}
-                            onCancel={() => cancelAction(action.id)}
-                          />
-                        ))}
-                      </div>
-                    </DashboardPanel>
-
-                    <DashboardPanel title="Notifications Intelligence" actionLabel="View all" href="/notifications">
-                      <div className="space-y-4">
-                        {(insights?.rankedNotifications ?? notifications).map((notification) => (
-                          <NotificationRow
-                            key={notification.id}
-                            notification={notification}
-                            onMarkRead={() => markNotificationRead(notification.id)}
-                            onRecategory={(category) => updateNotificationCategory(notification.id, category)}
-                          />
-                        ))}
-                      </div>
-                    </DashboardPanel>
-                  </div>
-
-                </>
+                <VisionDashboard
+                  profileName={profile.name}
+                  dailyBrief={insights?.dailyBrief ?? fallbackBrief}
+                  focusMessage={insights?.focusMessage ?? fallbackFocus}
+                  ollamaModel={runtime.ollamaModel}
+                  tasks={tasks}
+                  reminders={reminders}
+                  calendarEvents={sortedCalendarEvents}
+                  notifications={insights?.rankedNotifications ?? notifications}
+                  pendingActions={pendingApprovals}
+                  pendingDraftCount={pendingDraftCount}
+                  isRefreshing={isRefreshingInsights}
+                  onRefresh={() => void refreshInsights()}
+                  onToggleTask={(taskId) => void toggleTask(taskId)}
+                  onApproveAction={(actionId) => void approveAction(actionId)}
+                  onMarkNotificationRead={(notificationId) => void markNotificationRead(notificationId)}
+                />
               ) : null}
 
               {section === "tasks" ? (
@@ -1530,61 +1426,51 @@ function RelayBrand() {
 }
 
 function TopCommandBar({
+  section,
   command,
   setCommand,
   submitCommand,
 }: {
+  section: NavKey;
   command: string;
   setCommand: (value: string) => void;
   submitCommand: () => void;
 }) {
-  return (
-    <div className="flex items-start gap-4 lg:pr-[15.5rem]">
-      <div className="command-bar flex-1">
-        <button type="button" className="icon-chip hidden sm:inline-flex">
-          <Sparkles className="h-4 w-4 text-[var(--warn)]" />
-        </button>
+  const pageLabel = navItems.find((item) => item.key === section)?.label ?? "Dashboard";
 
-        <div className="min-w-0 flex-1">
-          <p className="command-prompt title-soft text-base">What would you like Relay to do?</p>
-          <div className="command-samples mt-2 flex flex-wrap gap-2">
-            {commandSamples.slice(0, 2).map((sample) => (
-              <button key={sample} type="button" onClick={() => setCommand(sample)} className="rounded-full border border-[color:color-mix(in_srgb,var(--surface-outline)_55%,transparent_45%)] px-3 py-1.5 text-sm text-muted transition hover:border-[color:color-mix(in_srgb,var(--warn)_40%,transparent_60%)] hover:text-[var(--title)]">
-                {sample}
-              </button>
-            ))}
-          </div>
+  return (
+    <header className="vision-page-header">
+      <div className="vision-page-meta">
+        <p><span>Pages</span><b>/</b>{pageLabel}</p>
+        <h1>{pageLabel}</h1>
+      </div>
+
+      <div className="vision-header-actions">
+        <div className="vision-command-field">
+          <Search aria-hidden="true" />
           <input
             value={command}
             onChange={(event) => setCommand(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                submitCommand();
-              }
+              if (event.key === "Enter") submitCommand();
             }}
             placeholder="Ask Relay..."
-            className="command-input mt-3 w-full bg-transparent text-sm text-[var(--title)] outline-none placeholder:text-muted"
+            aria-label="Ask Relay"
           />
+          <VoiceInputButton onTranscript={setCommand} />
+          <button type="button" onClick={submitCommand} aria-label="Send command">
+            <Send aria-hidden="true" />
+          </button>
         </div>
-
-        <button type="button" className="icon-chip" onClick={submitCommand}>
-          <Send className="h-4 w-4 text-[var(--warn)]" />
-        </button>
-        <VoiceInputButton onTranscript={setCommand} />
+        <Link href="/settings" className="vision-header-link">
+          <Settings aria-hidden="true" />
+          <span>Settings</span>
+        </Link>
+        <Link href="/notifications" className="vision-header-icon" aria-label="Notifications">
+          <Bell aria-hidden="true" />
+        </Link>
       </div>
-
-      <div className="hidden items-center gap-3 lg:flex">
-        <button type="button" className="icon-chip">
-          <Search className="h-4 w-4 text-[var(--warn)]" />
-        </button>
-        <button type="button" className="icon-chip">
-          <SunMedium className="h-4 w-4 text-[var(--warn)]" />
-        </button>
-        <button type="button" className="icon-chip">
-          <Bell className="h-4 w-4 text-[var(--title)]" />
-        </button>
-      </div>
-    </div>
+    </header>
   );
 }
 
@@ -2021,70 +1907,6 @@ function CalendarEventEditor({
   );
 }
 
-function StatChip({
-  icon: Icon,
-  value,
-  label,
-  tone,
-}: {
-  icon: ComponentType<{ className?: string }>;
-  value: number;
-  label: string;
-  tone: "teal" | "rose" | "gold";
-}) {
-  return (
-    <div className="status-panel px-4 py-4">
-      <div className="flex items-center gap-3">
-        <Icon
-          className={clsx(
-            "h-5 w-5",
-            tone === "teal" && "text-[var(--accent)]",
-            tone === "rose" && "text-[var(--danger)]",
-            tone === "gold" && "text-[var(--warn)]",
-          )}
-        />
-        <p className="title-soft text-[2rem] leading-none">{value}</p>
-      </div>
-      <p className="copy-soft mt-2 text-sm">{label}</p>
-    </div>
-  );
-}
-
-function ConfirmationRow({
-  action,
-  onApprove,
-  onCancel,
-}: {
-  action: PendingAction;
-  onApprove: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="app-card p-3.5">
-      <div className="flex items-start gap-3">
-        <div className={clsx("mt-0.5 rounded-[0.8rem] px-3 py-2 text-sm", iconToneClass(action.type))}>{iconSymbol(action.type)}</div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="title-main text-base">{action.title}</p>
-              <p className="mt-1 text-sm text-muted">{action.description}</p>
-            </div>
-            <StatusPill value={action.risk} tone={action.risk === "high" ? "danger" : action.risk === "medium" ? "warning" : "success"} />
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button type="button" onClick={onApprove} className="small-action primary">
-              Approve
-            </button>
-            <button type="button" onClick={onCancel} className="small-action">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function EditableConfirmationCard({
   action,
   onChange,
@@ -2377,18 +2199,6 @@ function formatAuditTime(value: string) {
   return date.toLocaleString([], {
     month: "short",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatScheduleTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleTimeString([], {
     hour: "numeric",
     minute: "2-digit",
   });

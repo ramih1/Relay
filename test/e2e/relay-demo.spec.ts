@@ -6,7 +6,9 @@ async function enterWorkspace(page: import("@playwright/test").Page) {
   const signIn = page.getByRole("button", { name: "Continue into Relay" });
   if (await signIn.isVisible().catch(() => false)) await signIn.click();
   await expect(page).toHaveTitle("Relay");
-  await expect(page.getByText("Today Brief", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Relay dashboard")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Daily Focus" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Approval Safety" })).toBeVisible();
 }
 
 test("desktop dashboard renders without browser errors", async ({ page }, testInfo) => {
@@ -41,7 +43,7 @@ test("local AI creates an approved persistent task when Ollama is available", as
 
   await enterWorkspace(page);
   const marker = `Relay browser verification task ${Date.now()}`;
-  const command = page.getByPlaceholder("Try: Remind me to study tomorrow at 10am");
+  const command = page.getByPlaceholder("Ask Relay...");
   await command.fill(`Create a high priority task called ${marker} due tomorrow at 5 PM`);
   const assistantResponse = page.waitForResponse(
     (response) => response.url().endsWith("/api/assistant") && response.request().method() === "POST",
@@ -65,8 +67,10 @@ test("mobile dashboard exposes navigation, voice input, and notes", async ({ pag
   test.skip(testInfo.project.name !== "mobile", "Responsive navigation is covered by the mobile project.");
   await enterWorkspace(page);
   await expect(page.getByRole("link", { name: "Assistant", exact: true }).last()).toBeVisible();
+  await expect(page.getByText("Today's schedule", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /voice input/i })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("dashboard-mobile.png"), fullPage: false });
+
   await page.goto("/notes");
   await expect(page.getByText("Note Library", { exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("notes-mobile.png"), fullPage: false });
 });

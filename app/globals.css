@@ -196,16 +196,6 @@ select {
   background: linear-gradient(180deg, color-mix(in srgb, var(--panel-alt) 96%, transparent 4%), color-mix(in srgb, var(--panel) 96%, transparent 4%));
 }
 
-.command-bar {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  border: 1px solid color-mix(in srgb, var(--surface-outline) 100%, transparent 0%);
-  border-radius: 1.45rem;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--panel-alt) 100%, transparent 0%), color-mix(in srgb, var(--panel) 100%, transparent 0%));
-  padding: 1rem 1.15rem;
-}
-
 .icon-chip {
   display: inline-flex;
   height: 2.85rem;
@@ -578,12 +568,6 @@ select {
   background: var(--surface-elevated-strong);
 }
 
-.focus-block {
-  border: 1px solid color-mix(in srgb, var(--surface-outline) 44%, transparent 56%);
-  border-radius: 1.15rem;
-  background: var(--surface-elevated);
-}
-
 .accent-orb {
   background: radial-gradient(circle, color-mix(in srgb, var(--accent) 26%, transparent 74%), color-mix(in srgb, var(--accent) 8%, transparent 92%));
   color: var(--accent);
@@ -726,17 +710,11 @@ select {
   box-shadow: inset 3px 0 0 #8a68ff, 0 8px 28px rgba(74, 55, 255, 0.16);
 }
 
-.command-bar,
 .feature-panel,
 .hero-panel,
 .soft-card {
   border-color: color-mix(in srgb, var(--accent) 22%, transparent 78%);
   background: linear-gradient(145deg, color-mix(in srgb, var(--panel-alt) 96%, transparent 4%), color-mix(in srgb, var(--panel) 99%, transparent 1%));
-}
-
-.command-bar {
-  border-radius: 1rem;
-  box-shadow: 0 14px 45px rgba(0, 0, 0, 0.16);
 }
 
 .feature-panel,
@@ -750,34 +728,6 @@ select {
   background:
     radial-gradient(circle at 82% 18%, color-mix(in srgb, var(--accent) 20%, transparent 80%), transparent 29%),
     linear-gradient(145deg, color-mix(in srgb, var(--panel-alt) 98%, transparent 2%), color-mix(in srgb, var(--panel) 100%, transparent 0%));
-}
-
-.dashboard-metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-top: 1.25rem;
-}
-
-.dashboard-metrics > * {
-  min-height: 7.3rem;
-  border-radius: 0.95rem;
-  background: linear-gradient(145deg, rgba(16, 22, 64, 0.94), rgba(5, 8, 30, 0.98));
-  animation: panel-enter 480ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
-}
-
-.vision-hero {
-  min-height: 19rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  background-image:
-    linear-gradient(90deg, rgba(4, 7, 27, 0.98) 0%, rgba(4, 7, 27, 0.86) 39%, rgba(4, 7, 27, 0.18) 74%),
-    url("/images/relay-neural-wave.jpg");
-  background-position: center;
-  background-size: cover;
-  border-color: rgba(123, 95, 255, 0.3);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 20px 55px rgba(0, 0, 0, 0.2);
 }
 
 .voice-input-button {
@@ -809,10 +759,6 @@ select {
   font-size: 0.78rem;
   font-weight: 600;
 }
-
-.dashboard-metrics > *:nth-child(2) { animation-delay: 55ms; }
-.dashboard-metrics > *:nth-child(3) { animation-delay: 110ms; }
-.dashboard-metrics > *:nth-child(4) { animation-delay: 165ms; }
 
 .accent-orb {
   animation: relay-pulse 3.8s ease-in-out infinite;
@@ -866,15 +812,9 @@ select {
 }
 
 @media (max-width: 760px) {
-  .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero-panel { min-height: auto; }
   .ambient-aurora { left: -24rem; width: 58rem; }
-  .command-bar { align-items: center; gap: 0.6rem; padding: 0.7rem; }
-  .command-prompt { display: none; }
-  .command-input { margin-top: 0; min-height: 2.85rem; }
-  .command-samples { display: none; }
   .section-title { font-size: 2.35rem; line-height: 1.04; }
-  .vision-hero { background-position: 58% center; }
   .voice-input-button { width: 2.85rem; padding: 0; }
   .voice-input-label { display: none; }
 }
