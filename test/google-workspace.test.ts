@@ -1,10 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { prisma } from "@/lib/db/prisma";
 import { createGoogleCalendarEvent, createGoogleGmailDraft, deleteGoogleCalendarEvent, deleteGoogleGmailDraft } from "@/lib/server/google-workspace";
+import { usesDatabase } from "@/lib/server/auth";
 import { clearGoogleTokens, saveGoogleTokens } from "@/lib/server/relay-secrets";
 
 const gmailScope = "https://www.googleapis.com/auth/gmail.compose";
 const calendarScope = "https://www.googleapis.com/auth/calendar.events";
+
+async function provisionTestUser(userId: string) {
+  if (!usesDatabase()) return;
+  await prisma.user.create({
+    data: {
+      id: userId,
+      name: "Google Integration Test",
+      email: `${userId}@example.test`,
+      passwordHash: "test-only-password-hash",
+    },
+  });
+}
+
+async function removeTestUser(userId: string) {
+  if (!usesDatabase()) return;
+  await prisma.user.deleteMany({ where: { id: userId } });
+}
 
 test("Google sync creates Gmail drafts and Calendar events with per-user credentials", async () => {
   const userId = `google-test-${crypto.randomUUID()}`;
@@ -13,6 +32,7 @@ test("Google sync creates Gmail drafts and Calendar events with per-user credent
   process.env.RELAY_ENCRYPTION_KEY = "google-workspace-test-encryption-key";
   const requests: Array<{ url: string; method: string }> = [];
   try {
+    await provisionTestUser(userId);
     await saveGoogleTokens(userId, {
       accessToken: "user-access-token",
       refreshToken: "user-refresh-token",
@@ -75,6 +95,7 @@ test("Google sync creates Gmail drafts and Calendar events with per-user credent
   } finally {
     global.fetch = originalFetch;
     await clearGoogleTokens(userId);
+    await removeTestUser(userId);
     if (originalKey === undefined) delete process.env.RELAY_ENCRYPTION_KEY;
     else process.env.RELAY_ENCRYPTION_KEY = originalKey;
   }
@@ -90,6 +111,7 @@ test("Google sync refreshes expired access tokens and surfaces API failures", as
   process.env.GOOGLE_CLIENT_ID = "test-client";
   process.env.GOOGLE_CLIENT_SECRET = "test-secret";
   try {
+    await provisionTestUser(userId);
     await saveGoogleTokens(userId, {
       accessToken: "expired-token",
       refreshToken: "refresh-token",
@@ -121,6 +143,7 @@ test("Google sync refreshes expired access tokens and surfaces API failures", as
   } finally {
     global.fetch = originalFetch;
     await clearGoogleTokens(userId);
+    await removeTestUser(userId);
     if (originalKey === undefined) delete process.env.RELAY_ENCRYPTION_KEY;
     else process.env.RELAY_ENCRYPTION_KEY = originalKey;
     if (originalClientId === undefined) delete process.env.GOOGLE_CLIENT_ID;
