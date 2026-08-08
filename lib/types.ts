@@ -5,6 +5,8 @@ export type NavKey =
   | "notes"
   | "reminders"
   | "calendar"
+  | "workouts"
+  | "nutrition"
   | "confirmations"
   | "notifications"
   | "settings";
@@ -34,17 +36,46 @@ export type IntegrationState = {
 
 export type SessionState = {
   isAuthenticated: boolean;
+  userId?: string;
   lastActiveAt?: string;
 };
 
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
 export type RuntimeStatus = {
-  storageMode: "file";
+  storageMode: "file" | "database";
   databaseConfigured: boolean;
   ollamaConfigured: boolean;
   ollamaModel: string;
   googleOAuthConfigured: boolean;
   gmailConfigured: boolean;
   calendarConfigured: boolean;
+};
+
+export type WorkoutLog = {
+  id: string;
+  activity: string;
+  durationMinutes: number;
+  caloriesBurned?: number;
+  intensity: "low" | "moderate" | "high";
+  notes?: string;
+  performedAt: string;
+};
+
+export type MealLog = {
+  id: string;
+  name: string;
+  mealType: "breakfast" | "lunch" | "dinner" | "snack";
+  calories: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  eatenAt: string;
 };
 
 export type SyncStatus = "local" | "synced" | "failed";
@@ -151,6 +182,8 @@ export type RelayStateSnapshot = {
   reminders: Reminder[];
   calendarEvents: CalendarEvent[];
   notifications: NotificationItem[];
+  workouts: WorkoutLog[];
+  meals: MealLog[];
   drafts: EmailDraft[];
   pendingActions: PendingAction[];
   assistantFeed: string[];
@@ -222,6 +255,7 @@ export type RelayMutationRequest =
     }
   | { type: "update_calendar_event"; eventId: string; updates: Partial<CalendarEvent> }
   | { type: "delete_calendar_event"; eventId: string }
+  | { type: "retry_calendar_sync"; eventId: string }
   | { type: "mark_notification_read"; notificationId: string }
   | {
       type: "update_notification_category";
@@ -230,10 +264,18 @@ export type RelayMutationRequest =
     }
   | { type: "update_reminder"; reminderId: string; updates: Partial<Reminder> }
   | { type: "delete_reminder"; reminderId: string }
+  | {
+      type: "add_workout";
+      input: Omit<WorkoutLog, "id">;
+    }
+  | { type: "delete_workout"; workoutId: string }
+  | {
+      type: "add_meal";
+      input: Omit<MealLog, "id">;
+    }
+  | { type: "delete_meal"; mealId: string }
   | { type: "save_draft"; draftId: string; updates: Partial<EmailDraft> }
   | { type: "delete_draft"; draftId: string }
-  | { type: "sign_in" }
-  | { type: "sign_out" }
   | { type: "update_preferences"; updates: Partial<UserPreferences> }
   | { type: "update_profile"; updates: Partial<UserProfile> }
   | { type: "update_integrations"; updates: Partial<IntegrationState> };

@@ -7,19 +7,108 @@ datasource db {
 }
 
 model User {
-  id             String             @id @default(uuid())
-  name           String?
-  email          String             @unique
-  createdAt      DateTime           @default(now())
-  tasks          Task[]
-  notes          Note[]
-  reminders      Reminder[]
-  calendarEvents CalendarEvent[]
-  notifications  Notification[]
-  emailDrafts    EmailDraft[]
-  pendingActions PendingAction[]
-  actionLogs     ActionLog[]
-  assistantRuns  AssistantRequest[]
+  id               String             @id @default(uuid())
+  name             String
+  email            String             @unique
+  passwordHash     String
+  role             String             @default("Member")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  tasks            Task[]
+  notes            Note[]
+  reminders        Reminder[]
+  calendarEvents   CalendarEvent[]
+  notifications    Notification[]
+  emailDrafts      EmailDraft[]
+  pendingActions   PendingAction[]
+  actionLogs       ActionLog[]
+  assistantRuns    AssistantRequest[]
+  sessions         Session[]
+  workspace        WorkspaceState?
+  googleConnection GoogleConnection?
+  oauthStates      GoogleOAuthState[]
+  workouts         WorkoutLog[]
+  meals            MealLog[]
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model WorkspaceState {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  data      Json
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model GoogleConnection {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+  encryptedTokens String
+  scopes          String[]
+  expiresAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model GoogleOAuthState {
+  nonce        String   @id
+  userId       String
+  service      String
+  redirectPath String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model WorkoutLog {
+  id              String   @id @default(uuid())
+  userId          String
+  activity        String
+  durationMinutes Int
+  caloriesBurned  Int?
+  intensity       String
+  notes           String?
+  performedAt     DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, performedAt])
+}
+
+model MealLog {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  mealType  String
+  calories  Int
+  protein   Float?
+  carbs     Float?
+  fat       Float?
+  eatenAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, eatenAt])
 }
 
 model Task {
@@ -207,6 +296,7 @@ enum EmailDraftStatus {
 enum PendingActionType {
   CREATE_REMINDER
   CREATE_TASK
+  CREATE_CALENDAR_EVENT
   DRAFT_EMAIL
   CREATE_TASKS_FROM_NOTE
 }
@@ -239,5 +329,6 @@ enum ActionImpact {
 enum AssistantRequestStatus {
   QUEUED
   PROPOSAL_CREATED
+  COMPLETED
   NEEDS_CLARIFICATION
 }

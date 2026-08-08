@@ -26,7 +26,12 @@ import type {
   RuntimeStatus,
   UserPreferences,
   UserProfile,
+  WorkoutLog,
+  MealLog,
 } from "@/lib/types";
+
+type AuthInput = { email: string; password: string };
+type RegisterInput = AuthInput & { name: string };
 
 type NewTaskInput = {
   title: string;
@@ -62,6 +67,8 @@ type RelayStore = {
   reminders: Reminder[];
   calendarEvents: CalendarEvent[];
   notifications: NotificationItem[];
+  workouts: WorkoutLog[];
+  meals: MealLog[];
   drafts: EmailDraft[];
   pendingActions: PendingAction[];
   assistantFeed: string[];
@@ -75,7 +82,8 @@ type RelayStore = {
   isHydrating: boolean;
   lastError: string | null;
   submitCommand: (input: string) => Promise<void>;
-  signIn: () => Promise<void>;
+  signIn: (input: AuthInput) => Promise<void>;
+  register: (input: RegisterInput) => Promise<void>;
   signOut: () => Promise<void>;
   approveAction: (actionId: string) => Promise<void>;
   cancelAction: (actionId: string) => Promise<void>;
@@ -91,10 +99,15 @@ type RelayStore = {
   addCalendarEvent: (input: NewCalendarEventInput) => Promise<void>;
   updateCalendarEvent: (eventId: string, updates: Partial<CalendarEvent>) => Promise<void>;
   deleteCalendarEvent: (eventId: string) => Promise<void>;
+  retryCalendarSync: (eventId: string) => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
   updateNotificationCategory: (notificationId: string, category: NotificationItem["category"]) => Promise<void>;
   updateReminder: (reminderId: string, updates: Partial<Reminder>) => Promise<void>;
   deleteReminder: (reminderId: string) => Promise<void>;
+  addWorkout: (input: Omit<WorkoutLog, "id">) => Promise<void>;
+  deleteWorkout: (workoutId: string) => Promise<void>;
+  addMeal: (input: Omit<MealLog, "id">) => Promise<void>;
+  deleteMeal: (mealId: string) => Promise<void>;
   saveDraft: (draftId: string, updates: Partial<EmailDraft>) => Promise<void>;
   deleteDraft: (draftId: string) => Promise<void>;
   summarizeNote: (noteId: string) => Promise<void>;
@@ -111,6 +124,8 @@ const fallbackState: RelayStateSnapshot = {
   reminders: initialReminders,
   calendarEvents: initialCalendarEvents,
   notifications: initialNotifications,
+  workouts: [],
+  meals: [],
   drafts: initialEmailDrafts,
   pendingActions: initialPendingActions,
   assistantFeed: [
@@ -160,6 +175,17 @@ export function RelayProvider({ children }: { children: ReactNode }) {
 
     async function loadState() {
       try {
+        const sessionResponse = await fetch("/api/auth/session", { cache: "no-store" });
+        if (!sessionResponse.ok) throw new Error("Session check failed.");
+        const sessionBody = (await sessionResponse.json()) as { user: { id: string } | null };
+        if (!sessionBody.user) {
+          if (!cancelled) {
+            setState(fallbackState);
+            setLastError(null);
+            setIsHydrating(false);
+          }
+          return;
+        }
         const response = await fetch("/api/state", { cache: "no-store" });
         if (!response.ok) {
           if (!cancelled) {
@@ -206,6 +232,30 @@ export function RelayProvider({ children }: { children: ReactNode }) {
     setLastError(null);
   }
 
+  async function authenticate(endpoint: "login" | "register", input: AuthInput | RegisterInput) {
+    const response = await fetch(`/api/auth/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    if (!response.ok) {
+      const message = body.error || "Authentication failed.";
+      setLastError(message);
+      throw new Error(message);
+    }
+    const stateResponse = await fetch("/api/state", { cache: "no-store" });
+    if (!stateResponse.ok) throw new Error("Signed in, but the workspace could not be loaded.");
+    setState((await stateResponse.json()) as RelayStateSnapshot);
+    setLastError(null);
+  }
+
+  async function endSession() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setState(fallbackState);
+    setLastError(null);
+  }
+
   async function submitAssistant(input: string) {
     const response = await fetch("/api/assistant", {
       method: "POST",
@@ -229,8 +279,9 @@ export function RelayProvider({ children }: { children: ReactNode }) {
       isHydrating,
       lastError,
       submitCommand: submitAssistant,
-      signIn: async () => mutate({ type: "sign_in" }),
-      signOut: async () => mutate({ type: "sign_out" }),
+      signIn: async (input) => authenticate("login", input),
+      register: async (input) => authenticate("register", input),
+      signOut: endSession,
       approveAction: async (actionId) => mutate({ type: "approve_action", actionId }),
       cancelAction: async (actionId) => mutate({ type: "cancel_action", actionId }),
       updatePendingAction: async (actionId, updates) =>
@@ -256,11 +307,16 @@ export function RelayProvider({ children }: { children: ReactNode }) {
       addCalendarEvent: async (input) => mutate({ type: "add_calendar_event", input }),
       updateCalendarEvent: async (eventId, updates) => mutate({ type: "update_calendar_event", eventId, updates }),
       deleteCalendarEvent: async (eventId) => mutate({ type: "delete_calendar_event", eventId }),
+      retryCalendarSync: async (eventId) => mutate({ type: "retry_calendar_sync", eventId }),
       markNotificationRead: async (notificationId) => mutate({ type: "mark_notification_read", notificationId }),
       updateNotificationCategory: async (notificationId, category) =>
         mutate({ type: "update_notification_category", notificationId, category }),
       updateReminder: async (reminderId, updates) => mutate({ type: "update_reminder", reminderId, updates }),
       deleteReminder: async (reminderId) => mutate({ type: "delete_reminder", reminderId }),
+      addWorkout: async (input) => mutate({ type: "add_workout", input }),
+      deleteWorkout: async (workoutId) => mutate({ type: "delete_workout", workoutId }),
+      addMeal: async (input) => mutate({ type: "add_meal", input }),
+      deleteMeal: async (mealId) => mutate({ type: "delete_meal", mealId }),
       saveDraft: async (draftId, updates) => mutate({ type: "save_draft", draftId, updates }),
       deleteDraft: async (draftId) => mutate({ type: "delete_draft", draftId }),
       summarizeNote: async (noteId) => mutate({ type: "summarize_note", noteId }),

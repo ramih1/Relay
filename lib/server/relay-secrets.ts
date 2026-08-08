@@ -1,14 +1,17 @@
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { prisma } from "@/lib/db/prisma";
+import { usesDatabase } from "@/lib/server/auth";
 
-type PendingGoogleOAuth = {
+export type PendingGoogleOAuth = {
   nonce: string;
   service: "gmail" | "calendar" | "workspace";
   redirectPath?: string;
   createdAt: number;
 };
 
-type GoogleTokens = {
+export type GoogleTokens = {
   accessToken: string;
   refreshToken?: string;
   scope: string[];
@@ -16,65 +19,141 @@ type GoogleTokens = {
   tokenType?: string;
 };
 
-type RelaySecrets = {
-  google?: GoogleTokens;
+type LocalUserSecrets = {
+  google?: string;
   pendingGoogleOAuth?: PendingGoogleOAuth;
 };
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const SECRETS_FILE = path.join(DATA_DIR, "relay-secrets.json");
+type LocalSecrets = { users: Record<string, LocalUserSecrets> };
 
-async function ensureDataDir() {
-  await mkdir(DATA_DIR, { recursive: true });
+const SECRETS_FILE = path.join(process.cwd(), "data", "relay-secrets.json");
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
+function encryptionKey() {
+  const source = process.env.RELAY_ENCRYPTION_KEY;
+  if (!source && process.env.NODE_ENV === "production") {
+    throw new Error("RELAY_ENCRYPTION_KEY is required in production.");
+  }
+  return createHash("sha256").update(source || "relay-local-development-key").digest();
 }
 
-async function persistSecrets(secrets: RelaySecrets) {
-  await ensureDataDir();
-  await writeFile(SECRETS_FILE, JSON.stringify(secrets, null, 2), "utf8");
+export function encryptGoogleTokens(value: GoogleTokens) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(value), "utf8"), cipher.final()]);
+  return `${iv.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}.${encrypted.toString("base64url")}`;
 }
 
-export async function loadRelaySecrets(): Promise<RelaySecrets> {
+export function decryptGoogleTokens(value: string): GoogleTokens {
+  const [ivPart, tagPart, encryptedPart] = value.split(".");
+  if (!ivPart || !tagPart || !encryptedPart) throw new Error("Stored Google credentials are invalid.");
+  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(ivPart, "base64url"));
+  decipher.setAuthTag(Buffer.from(tagPart, "base64url"));
+  const decrypted = Buffer.concat([decipher.update(Buffer.from(encryptedPart, "base64url")), decipher.final()]);
+  return JSON.parse(decrypted.toString("utf8")) as GoogleTokens;
+}
+
+async function loadLocalSecrets(): Promise<LocalSecrets> {
   try {
-    const raw = await readFile(SECRETS_FILE, "utf8");
-    return JSON.parse(raw) as RelaySecrets;
+    const parsed = JSON.parse(await readFile(SECRETS_FILE, "utf8")) as Partial<LocalSecrets>;
+    return { users: parsed.users ?? {} };
   } catch {
-    return {};
+    return { users: {} };
   }
 }
 
-export async function savePendingGoogleOAuth(pendingGoogleOAuth: PendingGoogleOAuth) {
-  const secrets = await loadRelaySecrets();
-  secrets.pendingGoogleOAuth = pendingGoogleOAuth;
-  await persistSecrets(secrets);
+async function saveLocalSecrets(secrets: LocalSecrets) {
+  await mkdir(path.dirname(SECRETS_FILE), { recursive: true });
+  await writeFile(SECRETS_FILE, JSON.stringify(secrets, null, 2), { encoding: "utf8", mode: 0o600 });
 }
 
-export async function consumePendingGoogleOAuth(nonce: string) {
-  const secrets = await loadRelaySecrets();
-  const pending = secrets.pendingGoogleOAuth;
+let localSecretsQueue: Promise<void> = Promise.resolve();
 
-  if (!pending || pending.nonce !== nonce) {
-    return null;
+async function mutateLocalSecrets<T>(mutation: (secrets: LocalSecrets) => T | Promise<T>) {
+  let result!: T;
+  const operation = localSecretsQueue.then(async () => {
+    const secrets = await loadLocalSecrets();
+    result = await mutation(secrets);
+    await saveLocalSecrets(secrets);
+  });
+  localSecretsQueue = operation.catch(() => undefined);
+  await operation;
+  return result;
+}
+
+export async function savePendingGoogleOAuth(userId: string, pending: PendingGoogleOAuth) {
+  if (usesDatabase()) {
+    await prisma.googleOAuthState.deleteMany({ where: { userId } });
+    await prisma.googleOAuthState.create({
+      data: {
+        nonce: pending.nonce,
+        userId,
+        service: pending.service,
+        redirectPath: pending.redirectPath,
+        expiresAt: new Date(pending.createdAt + OAUTH_STATE_TTL_MS),
+      },
+    });
+    return;
   }
-
-  delete secrets.pendingGoogleOAuth;
-  await persistSecrets(secrets);
-  return pending;
+  await mutateLocalSecrets((secrets) => {
+    secrets.users[userId] = { ...secrets.users[userId], pendingGoogleOAuth: pending };
+  });
 }
 
-export async function saveGoogleTokens(tokens: GoogleTokens) {
-  const secrets = await loadRelaySecrets();
-  secrets.google = tokens;
-  delete secrets.pendingGoogleOAuth;
-  await persistSecrets(secrets);
+export async function consumePendingGoogleOAuth(userId: string, nonce: string) {
+  if (usesDatabase()) {
+    const pending = await prisma.googleOAuthState.findUnique({ where: { nonce } });
+    if (!pending || pending.userId !== userId || pending.expiresAt.getTime() <= Date.now()) return null;
+    await prisma.googleOAuthState.delete({ where: { nonce } });
+    return {
+      nonce: pending.nonce,
+      service: pending.service as PendingGoogleOAuth["service"],
+      redirectPath: pending.redirectPath ?? undefined,
+      createdAt: pending.createdAt.getTime(),
+    };
+  }
+  return mutateLocalSecrets((secrets) => {
+    const pending = secrets.users[userId]?.pendingGoogleOAuth;
+    if (!pending || pending.nonce !== nonce || pending.createdAt + OAUTH_STATE_TTL_MS <= Date.now()) return null;
+    delete secrets.users[userId].pendingGoogleOAuth;
+    return pending;
+  });
 }
 
-export async function getGoogleTokens() {
-  const secrets = await loadRelaySecrets();
-  return secrets.google;
+export async function saveGoogleTokens(userId: string, tokens: GoogleTokens) {
+  const encryptedTokens = encryptGoogleTokens(tokens);
+  if (usesDatabase()) {
+    await prisma.googleConnection.upsert({
+      where: { userId },
+      create: { userId, encryptedTokens, scopes: tokens.scope, expiresAt: tokens.expiresAt ? new Date(tokens.expiresAt) : null },
+      update: { encryptedTokens, scopes: tokens.scope, expiresAt: tokens.expiresAt ? new Date(tokens.expiresAt) : null },
+    });
+    await prisma.googleOAuthState.deleteMany({ where: { userId } });
+    return;
+  }
+  await mutateLocalSecrets((secrets) => {
+    secrets.users[userId] = { ...secrets.users[userId], google: encryptedTokens };
+    delete secrets.users[userId].pendingGoogleOAuth;
+  });
 }
 
-export async function clearGoogleTokens() {
-  const secrets = await loadRelaySecrets();
-  delete secrets.google;
-  await persistSecrets(secrets);
+export async function getGoogleTokens(userId: string) {
+  if (usesDatabase()) {
+    const connection = await prisma.googleConnection.findUnique({ where: { userId } });
+    return connection ? decryptGoogleTokens(connection.encryptedTokens) : undefined;
+  }
+  const secrets = await loadLocalSecrets();
+  const encrypted = secrets.users[userId]?.google;
+  return encrypted ? decryptGoogleTokens(encrypted) : undefined;
+}
+
+export async function clearGoogleTokens(userId: string) {
+  if (usesDatabase()) {
+    await prisma.googleConnection.deleteMany({ where: { userId } });
+    await prisma.googleOAuthState.deleteMany({ where: { userId } });
+    return;
+  }
+  await mutateLocalSecrets((secrets) => {
+    delete secrets.users[userId];
+  });
 }

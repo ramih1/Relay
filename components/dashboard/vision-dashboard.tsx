@@ -12,6 +12,8 @@ import {
   Mail,
   ShieldCheck,
   Sparkles,
+  Dumbbell,
+  Utensils,
 } from "lucide-react";
 import type {
   CalendarEvent,
@@ -19,6 +21,8 @@ import type {
   PendingAction,
   Reminder,
   Task,
+  WorkoutLog,
+  MealLog,
 } from "@/lib/types";
 
 type VisionDashboardProps = {
@@ -30,6 +34,8 @@ type VisionDashboardProps = {
   reminders: Reminder[];
   calendarEvents: CalendarEvent[];
   notifications: NotificationItem[];
+  workouts: WorkoutLog[];
+  meals: MealLog[];
   pendingActions: PendingAction[];
   pendingDraftCount: number;
   isRefreshing: boolean;
@@ -48,6 +54,8 @@ export function VisionDashboard({
   reminders,
   calendarEvents,
   notifications,
+  workouts,
+  meals,
   pendingActions,
   pendingDraftCount,
   isRefreshing,
@@ -66,6 +74,9 @@ export function VisionDashboard({
   const highRiskActions = pendingActions.filter((action) => action.risk === "high").length;
   const approvalScore = Math.max(8.1, 10 - highRiskActions * 0.4 - pendingActions.length * 0.03).toFixed(1);
   const dayLoad = Math.min(100, calendarEvents.length * 12 + openTasks.length * 6 + activeReminders * 4);
+  const today = new Date().toISOString().slice(0, 10);
+  const caloriesToday = meals.filter((meal) => meal.eatenAt.startsWith(today)).reduce((total, meal) => total + meal.calories, 0);
+  const weeklyMinutes = workouts.filter((workout) => Date.now() - new Date(workout.performedAt).getTime() <= 7 * 86_400_000).reduce((total, workout) => total + workout.durationMinutes, 0);
 
   const metrics = [
     {
@@ -99,6 +110,22 @@ export function VisionDashboard({
       icon: BellRing,
       trend: urgentNotifications > 0 ? "Needs attention" : "All clear",
       tone: "blue",
+    },
+    {
+      label: "Weekly movement",
+      value: weeklyMinutes,
+      detail: `${workouts.length} sessions logged`,
+      icon: Dumbbell,
+      trend: "7 day total",
+      tone: "cyan",
+    },
+    {
+      label: "Calories today",
+      value: caloriesToday,
+      detail: `${meals.filter((meal) => meal.eatenAt.startsWith(today)).length} meals logged`,
+      icon: Utensils,
+      trend: "User entered",
+      tone: "violet",
     },
   ] as const;
 

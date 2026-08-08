@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import {
@@ -20,6 +20,9 @@ import {
   StickyNote,
   SunMedium,
   Trash2,
+  Dumbbell,
+  Utensils,
+  Menu,
 } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type {
@@ -33,6 +36,8 @@ import type {
   Reminder,
   Task,
   ThemeName,
+  WorkoutLog,
+  MealLog,
 } from "@/lib/types";
 import { useRelay } from "@/components/relay-provider";
 import { VoiceInputButton } from "@/components/assistant/voice-input-button";
@@ -45,6 +50,8 @@ const navItems: { key: NavKey; label: string; href: string; icon: ComponentType<
   { key: "notes", label: "Notes", href: "/notes", icon: StickyNote },
   { key: "reminders", label: "Reminders", href: "/reminders", icon: Clock3 },
   { key: "calendar", label: "Calendar", href: "/calendar", icon: CalendarDays },
+  { key: "workouts", label: "Workouts", href: "/workouts", icon: Dumbbell },
+  { key: "nutrition", label: "Nutrition", href: "/nutrition", icon: Utensils },
   { key: "confirmations", label: "Confirmations", href: "/confirmations", icon: CheckCheck },
   { key: "notifications", label: "Notifications", href: "/notifications", icon: Bell },
   { key: "settings", label: "Settings", href: "/settings", icon: Settings },
@@ -58,7 +65,7 @@ const commandSamples = [
   "Summarize notifications",
 ];
 
-const mobileNavItems = navItems.slice(0, 5);
+const mobileNavItems = navItems.filter((item) => ["dashboard", "tasks", "assistant", "notes"].includes(item.key));
 
 const confirmationTabs = ["pending", "approved", "cancelled"] as const;
 type ConfirmationTab = (typeof confirmationTabs)[number];
@@ -82,6 +89,8 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     reminders,
     calendarEvents,
     notifications,
+    workouts,
+    meals,
     drafts,
     pendingActions,
     assistantRequests,
@@ -95,6 +104,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     lastError,
     submitCommand,
     signIn,
+    register,
     signOut,
     approveAction,
     cancelAction,
@@ -110,10 +120,15 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     addCalendarEvent,
     updateCalendarEvent,
     deleteCalendarEvent,
+    retryCalendarSync,
     markNotificationRead,
     updateNotificationCategory,
     updateReminder,
     deleteReminder,
+    addWorkout,
+    deleteWorkout,
+    addMeal,
+    deleteMeal,
     saveDraft,
     deleteDraft,
     summarizeNote,
@@ -140,6 +155,23 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     end: "",
     location: "",
     tone: "teal" as CalendarEvent["tone"],
+  });
+  const [workoutForm, setWorkoutForm] = useState({
+    activity: "",
+    durationMinutes: "",
+    caloriesBurned: "",
+    intensity: "moderate" as WorkoutLog["intensity"],
+    notes: "",
+    performedAt: new Date().toISOString().slice(0, 10),
+  });
+  const [mealForm, setMealForm] = useState({
+    name: "",
+    mealType: "breakfast" as MealLog["mealType"],
+    calories: "",
+    protein: "",
+    carbs: "",
+    fat: "",
+    eatenAt: new Date().toISOString().slice(0, 10),
   });
   const [selectedTaskId, setSelectedTaskId] = useState<string>(tasks[0]?.id ?? "");
   const [selectedNoteId, setSelectedNoteId] = useState<string>(notes[0]?.id ?? "");
@@ -170,6 +202,12 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
   const overdueCount = tasks.filter((task) => task.status === "overdue").length;
   const activeReminderCount = reminders.filter((reminder) => reminder.status === "active").length;
   const pendingDraftCount = drafts.filter((draft) => draft.status === "draft").length;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const caloriesToday = meals.filter((meal) => meal.eatenAt.startsWith(todayKey)).reduce((total, meal) => total + meal.calories, 0);
+  const proteinToday = meals.filter((meal) => meal.eatenAt.startsWith(todayKey)).reduce((total, meal) => total + (meal.protein ?? 0), 0);
+  const weeklyWorkoutMinutes = workouts
+    .filter((workout) => Date.now() - new Date(workout.performedAt).getTime() <= 7 * 24 * 60 * 60 * 1000)
+    .reduce((total, workout) => total + workout.durationMinutes, 0);
   const notesPreview = notes.find((note) => note.id === selectedNoteId) ?? notes[0];
   const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) ?? drafts[0];
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
@@ -388,11 +426,44 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     });
   }
 
+  function handleAddWorkout() {
+    const durationMinutes = Number(workoutForm.durationMinutes);
+    const caloriesBurned = workoutForm.caloriesBurned ? Number(workoutForm.caloriesBurned) : undefined;
+    if (!workoutForm.activity.trim() || !Number.isFinite(durationMinutes) || durationMinutes <= 0) return;
+    addWorkout({
+      activity: workoutForm.activity.trim(),
+      durationMinutes,
+      caloriesBurned: caloriesBurned && caloriesBurned > 0 ? caloriesBurned : undefined,
+      intensity: workoutForm.intensity,
+      notes: workoutForm.notes.trim() || undefined,
+      performedAt: new Date(`${workoutForm.performedAt}T12:00:00`).toISOString(),
+    });
+    setWorkoutForm({ activity: "", durationMinutes: "", caloriesBurned: "", intensity: "moderate", notes: "", performedAt: todayKey });
+  }
+
+  function handleAddMeal() {
+    const calories = Number(mealForm.calories);
+    if (!mealForm.name.trim() || !Number.isFinite(calories) || calories <= 0) return;
+    const optionalNumber = (value: string) => value ? Math.max(0, Number(value)) : undefined;
+    addMeal({
+      name: mealForm.name.trim(),
+      mealType: mealForm.mealType,
+      calories,
+      protein: optionalNumber(mealForm.protein),
+      carbs: optionalNumber(mealForm.carbs),
+      fat: optionalNumber(mealForm.fat),
+      eatenAt: new Date(`${mealForm.eatenAt}T12:00:00`).toISOString(),
+    });
+    setMealForm({ name: "", mealType: "breakfast", calories: "", protein: "", carbs: "", fat: "", eatenAt: todayKey });
+  }
+
   const canCreateTask = taskForm.title.trim().length > 0 && taskForm.due.trim().length > 0;
   const canCreateNote = noteForm.title.trim().length > 0 && noteForm.content.trim().length > 0;
   const canCreateReminder = reminderForm.title.trim().length > 0 && reminderForm.when.trim().length > 0;
   const canCreateCalendarEvent =
     calendarForm.title.trim().length > 0 && calendarForm.start.trim().length > 0 && calendarForm.end.trim().length > 0;
+  const canCreateWorkout = workoutForm.activity.trim().length > 0 && Number(workoutForm.durationMinutes) > 0;
+  const canCreateMeal = mealForm.name.trim().length > 0 && Number(mealForm.calories) > 0;
 
   useEffect(() => {
     setTheme(preferences.theme);
@@ -460,11 +531,11 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
   }
 
   if (!session.isAuthenticated) {
-    return <AuthGate profile={profile} lastError={lastError} onSignIn={() => void signIn()} />;
+    return <AuthGate lastError={lastError} onSignIn={signIn} onRegister={register} />;
   }
 
   return (
-    <main className="vision-app min-h-screen bg-bg pb-24 text-text lg:pb-0">
+    <main id="main-content" className="vision-app min-h-screen bg-bg pb-24 text-text lg:pb-0">
       <div className="vision-app-background relative overflow-hidden">
         <div className="ambient-aurora" aria-hidden="true" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(86,211,208,0.08),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(226,190,125,0.07),_transparent_16%),radial-gradient(circle_at_center,_rgba(255,255,255,0.02),_transparent_28%)]" />
@@ -541,6 +612,8 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                   reminders={reminders}
                   calendarEvents={sortedCalendarEvents}
                   notifications={insights?.rankedNotifications ?? notifications}
+                  workouts={workouts}
+                  meals={meals}
                   pendingActions={pendingApprovals}
                   pendingDraftCount={pendingDraftCount}
                   isRefreshing={isRefreshingInsights}
@@ -1006,7 +1079,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                   <div className="mt-4">
                     <DashboardPanel title={selectedCalendarEvent ? `Edit ${selectedCalendarEvent.title}` : "Event Editor"}>
                       {selectedCalendarEvent ? (
-                        <CalendarEventEditor event={selectedCalendarEvent} onSave={updateCalendarEvent} />
+                        <CalendarEventEditor event={selectedCalendarEvent} onSave={updateCalendarEvent} onRetry={retryCalendarSync} />
                       ) : (
                         <EmptyState title="No event selected" description="Pick an event from today's schedule to edit its time, detail, or location." />
                       )}
@@ -1015,8 +1088,71 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                 </SectionPage>
               ) : null}
 
+              {section === "workouts" ? (
+                <SectionPage eyebrow="Movement" title="Build a sustainable training rhythm." description="Log workouts, track weekly movement, and keep health progress beside the rest of your day without turning Relay into a noisy fitness app.">
+                  <div className="mb-4 grid gap-4 md:grid-cols-3">
+                    <MetricCard label="Weekly minutes" value={String(weeklyWorkoutMinutes)} detail="Last seven days" />
+                    <MetricCard label="Sessions" value={String(workouts.length)} detail="Total workouts logged" />
+                    <MetricCard label="Calories burned" value={String(workouts.reduce((total, workout) => total + (workout.caloriesBurned ?? 0), 0))} detail="Estimated from your logs" />
+                  </div>
+                  <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+                    <DashboardPanel title="Log a Workout">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="text-sm text-muted md:col-span-2">Activity<input className="field-input mt-2" value={workoutForm.activity} onChange={(event) => setWorkoutForm((current) => ({ ...current, activity: event.target.value }))} placeholder="Strength training, run, basketball..." /></label>
+                        <label className="text-sm text-muted">Duration (minutes)<input className="field-input mt-2" type="number" min="1" max="1440" value={workoutForm.durationMinutes} onChange={(event) => setWorkoutForm((current) => ({ ...current, durationMinutes: event.target.value }))} /></label>
+                        <label className="text-sm text-muted">Calories burned<input className="field-input mt-2" type="number" min="0" max="10000" value={workoutForm.caloriesBurned} onChange={(event) => setWorkoutForm((current) => ({ ...current, caloriesBurned: event.target.value }))} /></label>
+                        <label className="text-sm text-muted">Intensity<select className="field-input mt-2" value={workoutForm.intensity} onChange={(event) => setWorkoutForm((current) => ({ ...current, intensity: event.target.value as WorkoutLog["intensity"] }))}><option value="low">Low</option><option value="moderate">Moderate</option><option value="high">High</option></select></label>
+                        <label className="text-sm text-muted">Date<input className="field-input mt-2" type="date" value={workoutForm.performedAt} onChange={(event) => setWorkoutForm((current) => ({ ...current, performedAt: event.target.value }))} /></label>
+                        <label className="text-sm text-muted md:col-span-2">Notes<textarea className="field-input mt-2 min-h-24" value={workoutForm.notes} onChange={(event) => setWorkoutForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Sets, distance, how it felt..." /></label>
+                      </div>
+                      <button type="button" className="relay-button mt-4" onClick={handleAddWorkout} disabled={!canCreateWorkout}>Save Workout</button>
+                    </DashboardPanel>
+                    <DashboardPanel title="Training History">
+                      {workouts.length ? <div className="space-y-3">{workouts.map((workout) => (
+                        <div key={workout.id} className="app-card flex items-start justify-between gap-4 p-4">
+                          <div><p className="title-main text-lg">{workout.activity}</p><p className="copy-soft mt-1 text-sm">{workout.durationMinutes} min • {workout.intensity} intensity • {new Date(workout.performedAt).toLocaleDateString()}</p>{workout.caloriesBurned ? <p className="accent-copy mt-2 text-sm">{workout.caloriesBurned} calories burned</p> : null}{workout.notes ? <p className="copy-strong mt-2 text-sm">{workout.notes}</p> : null}</div>
+                          <button type="button" className="small-action" onClick={() => deleteWorkout(workout.id)} aria-label={`Delete ${workout.activity} workout`}><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      ))}</div> : <EmptyState title="No workouts logged" description="Add your first session to begin a simple weekly movement record." />}
+                    </DashboardPanel>
+                  </div>
+                </SectionPage>
+              ) : null}
+
+              {section === "nutrition" ? (
+                <SectionPage eyebrow="Nutrition" title="Track fuel without the friction." description="Keep a straightforward calorie and macro log. Relay shows the numbers you entered without making medical claims or prescribing a diet.">
+                  <div className="mb-4 grid gap-4 md:grid-cols-3">
+                    <MetricCard label="Calories today" value={String(caloriesToday)} detail="From today's meal logs" />
+                    <MetricCard label="Protein today" value={`${Math.round(proteinToday)}g`} detail="Optional macro tracking" />
+                    <MetricCard label="Meals today" value={String(meals.filter((meal) => meal.eatenAt.startsWith(todayKey)).length)} detail="Entries recorded" />
+                  </div>
+                  <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+                    <DashboardPanel title="Log Food">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="text-sm text-muted md:col-span-2">Meal or food<input className="field-input mt-2" value={mealForm.name} onChange={(event) => setMealForm((current) => ({ ...current, name: event.target.value }))} placeholder="Chicken rice bowl" /></label>
+                        <label className="text-sm text-muted">Meal type<select className="field-input mt-2" value={mealForm.mealType} onChange={(event) => setMealForm((current) => ({ ...current, mealType: event.target.value as MealLog["mealType"] }))}><option value="breakfast">Breakfast</option><option value="lunch">Lunch</option><option value="dinner">Dinner</option><option value="snack">Snack</option></select></label>
+                        <label className="text-sm text-muted">Calories<input className="field-input mt-2" type="number" min="1" max="20000" value={mealForm.calories} onChange={(event) => setMealForm((current) => ({ ...current, calories: event.target.value }))} /></label>
+                        <label className="text-sm text-muted">Protein (g)<input className="field-input mt-2" type="number" min="0" step="0.1" value={mealForm.protein} onChange={(event) => setMealForm((current) => ({ ...current, protein: event.target.value }))} /></label>
+                        <label className="text-sm text-muted">Carbs (g)<input className="field-input mt-2" type="number" min="0" step="0.1" value={mealForm.carbs} onChange={(event) => setMealForm((current) => ({ ...current, carbs: event.target.value }))} /></label>
+                        <label className="text-sm text-muted">Fat (g)<input className="field-input mt-2" type="number" min="0" step="0.1" value={mealForm.fat} onChange={(event) => setMealForm((current) => ({ ...current, fat: event.target.value }))} /></label>
+                        <label className="text-sm text-muted">Date<input className="field-input mt-2" type="date" value={mealForm.eatenAt} onChange={(event) => setMealForm((current) => ({ ...current, eatenAt: event.target.value }))} /></label>
+                      </div>
+                      <button type="button" className="relay-button mt-4" onClick={handleAddMeal} disabled={!canCreateMeal}>Save Meal</button>
+                    </DashboardPanel>
+                    <DashboardPanel title="Food History">
+                      {meals.length ? <div className="space-y-3">{meals.map((meal) => (
+                        <div key={meal.id} className="app-card flex items-start justify-between gap-4 p-4">
+                          <div><p className="title-main text-lg">{meal.name}</p><p className="copy-soft mt-1 text-sm capitalize">{meal.mealType} • {new Date(meal.eatenAt).toLocaleDateString()}</p><p className="accent-copy mt-2 text-sm">{meal.calories} calories</p><p className="copy-strong mt-1 text-sm">P {meal.protein ?? 0}g • C {meal.carbs ?? 0}g • F {meal.fat ?? 0}g</p></div>
+                          <button type="button" className="small-action" onClick={() => deleteMeal(meal.id)} aria-label={`Delete ${meal.name} meal`}><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      ))}</div> : <EmptyState title="No meals logged" description="Add food when it is useful. Macro fields are optional and remain under your control." />}
+                    </DashboardPanel>
+                  </div>
+                </SectionPage>
+              ) : null}
+
               {section === "notifications" ? (
-                <SectionPage eyebrow="Notifications" title="See what matters now." description="Relay groups mock notifications by urgency so the dashboard stays calm instead of noisy.">
+                <SectionPage eyebrow="Notifications" title="See what matters now." description="Relay groups workspace notifications by urgency so the dashboard stays calm instead of noisy.">
                   <div className="mb-4 grid gap-4 md:grid-cols-4">
                     <MetricCard label="Urgent" value={String((insights?.rankedNotifications ?? notifications).filter((n) => n.category === "urgent").length)} detail="Needs attention now" />
                     <MetricCard label="Important" value={String((insights?.rankedNotifications ?? notifications).filter((n) => n.category === "important").length)} detail="Worth looking at soon" />
@@ -1158,7 +1294,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                         </p>
                       </div>
                     </DashboardPanel>
-                    <DashboardPanel title="Coming Integrations">
+                    <DashboardPanel title="Google Workspace">
                       <div className="space-y-4">
                         <p className="copy-strong text-sm leading-7">
                           Google Workspace can now be connected directly for Gmail draft sync and Google Calendar event sync.
@@ -1170,9 +1306,9 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                                 Connect Google Workspace
                               </a>
                               {(runtime.gmailConfigured || runtime.calendarConfigured) ? (
-                                <a href="/api/google/disconnect?redirect=/settings" className="small-action">
-                                  Disconnect Google
-                                </a>
+                                <form method="post" action="/api/google/disconnect?redirect=/settings">
+                                  <button type="submit" className="small-action">Disconnect Google</button>
+                                </form>
                               ) : null}
                             </>
                           ) : (
@@ -1345,7 +1481,7 @@ function ThemeRail({
 
 function WorkspaceSplash() {
   return (
-    <main className="min-h-screen px-5 py-10">
+    <main id="main-content" className="min-h-screen px-5 py-10">
       <div className="mx-auto flex min-h-[80vh] max-w-6xl items-center justify-center">
         <div className="hero-panel max-w-2xl text-center">
           <p className="eyebrow">Booting Workspace</p>
@@ -1362,16 +1498,33 @@ function WorkspaceSplash() {
 }
 
 function AuthGate({
-  profile,
   lastError,
   onSignIn,
+  onRegister,
 }: {
-  profile: { name: string; role: string };
   lastError: string | null;
-  onSignIn: () => void;
+  onSignIn: (input: { email: string; password: string }) => Promise<void>;
+  onRegister: (input: { name: string; email: string; password: string }) => Promise<void>;
 }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    try {
+      if (mode === "register") await onRegister({ name, email, password });
+      else await onSignIn({ email, password });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
-    <main className="min-h-screen px-5 py-10">
+    <main id="main-content" className="min-h-screen px-5 py-10">
       <div className="mx-auto flex min-h-[80vh] max-w-6xl items-center justify-center">
         <div className="hero-panel max-w-3xl">
           <p className="eyebrow">Secure Entry</p>
@@ -1395,13 +1548,29 @@ function AuthGate({
                 <li>• Settings, permissions, and assistant behavior persist with your workspace.</li>
               </ul>
             </div>
-            <div className="soft-card p-5">
-              <p className="title-main text-xl">{profile.name}</p>
-              <p className="copy-soft mt-1 text-sm">{profile.role} workspace</p>
-              <button type="button" className="relay-button mt-6 w-full justify-center" onClick={onSignIn}>
-                Continue into Relay
+            <form className="soft-card p-5" onSubmit={submit}>
+              <div className="flex gap-2" role="tablist" aria-label="Account action">
+                <button type="button" className={clsx("small-action", mode === "login" && "primary")} onClick={() => setMode("login")}>Sign in</button>
+                <button type="button" className={clsx("small-action", mode === "register" && "primary")} onClick={() => setMode("register")}>Create account</button>
+              </div>
+              {mode === "register" ? (
+                <label className="mt-5 block text-sm text-[var(--muted)]">
+                  Name
+                  <input className="field-input mt-2" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required minLength={2} maxLength={80} />
+                </label>
+              ) : null}
+              <label className="mt-4 block text-sm text-[var(--muted)]">
+                Email
+                <input className="field-input mt-2" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={254} />
+              </label>
+              <label className="mt-4 block text-sm text-[var(--muted)]">
+                Password
+                <input className="field-input mt-2" type="password" autoComplete={mode === "register" ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} required minLength={mode === "register" ? 10 : 1} maxLength={128} />
+              </label>
+              <button type="submit" className="relay-button mt-6 w-full justify-center" disabled={isSubmitting}>
+                {isSubmitting ? "Securing workspace..." : mode === "register" ? "Create secure workspace" : "Continue into Relay"}
               </button>
-            </div>
+            </form>
           </div>
         </div>
       </div>
@@ -1475,22 +1644,31 @@ function TopCommandBar({
 }
 
 function MobileNav({ section }: { section: NavKey }) {
+  const [moreOpen, setMoreOpen] = useState(false);
   return (
-    <nav className="mobile-dock lg:hidden">
-      {mobileNavItems.map(({ key, href, label, icon: Icon }) => (
-        <Link
-          key={key}
-          href={href}
-          className={clsx(
-            "mobile-dock-item",
-            section === key && "active",
-          )}
-        >
-          <Icon className="h-4 w-4" />
-          <span>{label}</span>
-        </Link>
-      ))}
-    </nav>
+    <>
+      {moreOpen ? (
+        <div className="fixed inset-x-4 bottom-24 z-50 rounded-[1.25rem] border border-[var(--surface-outline)] bg-[var(--surface)] p-3 shadow-2xl lg:hidden" role="dialog" aria-label="More navigation">
+          <div className="grid grid-cols-2 gap-2">
+            {navItems.filter((item) => !mobileNavItems.includes(item)).map(({ key, href, label, icon: Icon }) => (
+              <Link key={key} href={href} onClick={() => setMoreOpen(false)} className={clsx("nav-item", section === key && "active")}><Icon className="h-4 w-4" />{label}</Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <nav className="mobile-dock lg:hidden" aria-label="Mobile navigation">
+        {mobileNavItems.map(({ key, href, label, icon: Icon }) => (
+          <Link key={key} href={href} className={clsx("mobile-dock-item", section === key && "active")}>
+            <Icon className="h-4 w-4" />
+            <span>{label}</span>
+          </Link>
+        ))}
+        <button type="button" className={clsx("mobile-dock-item", moreOpen && "active")} onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen}>
+          <Menu className="h-4 w-4" />
+          <span>More</span>
+        </button>
+      </nav>
+    </>
   );
 }
 
@@ -1703,25 +1881,29 @@ function TaskEditor({
   task: Task;
   onSave: (taskId: string, updates: Partial<Task>) => void;
 }) {
+  const [form, setForm] = useState(task);
+  useEffect(() => setForm(task), [task]);
   return (
     <div className="space-y-3">
-      <input value={task.title} onChange={(e) => onSave(task.id, { title: e.target.value })} className="field-input" />
-      <input value={task.due} onChange={(e) => onSave(task.id, { due: e.target.value })} className="field-input" />
-      <select value={task.priority} onChange={(e) => onSave(task.id, { priority: e.target.value as Task["priority"] })} className="field-input">
+      <input aria-label="Task title" value={form.title} onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))} className="field-input" />
+      <input aria-label="Task due date" value={form.due} onChange={(e) => setForm((current) => ({ ...current, due: e.target.value }))} className="field-input" />
+      <select aria-label="Task priority" value={form.priority} onChange={(e) => setForm((current) => ({ ...current, priority: e.target.value as Task["priority"] }))} className="field-input">
         <option value="low">Low priority</option>
         <option value="medium">Medium priority</option>
         <option value="high">High priority</option>
       </select>
-      <select value={task.status} onChange={(e) => onSave(task.id, { status: e.target.value as Task["status"] })} className="field-input">
+      <select aria-label="Task status" value={form.status} onChange={(e) => setForm((current) => ({ ...current, status: e.target.value as Task["status"] }))} className="field-input">
         <option value="pending">Pending</option>
         <option value="done">Done</option>
         <option value="overdue">Overdue</option>
       </select>
       <textarea
-        value={task.description ?? ""}
-        onChange={(e) => onSave(task.id, { description: e.target.value })}
+        aria-label="Task description"
+        value={form.description ?? ""}
+        onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
         className="field-input min-h-32"
       />
+      <button type="button" className="small-action primary" onClick={() => onSave(task.id, form)}>Save Task Changes</button>
     </div>
   );
 }
@@ -1739,9 +1921,11 @@ function NoteEditor({
   onSuggestTags: (noteId: string) => void;
   onExtractTasks: () => void;
 }) {
+  const [form, setForm] = useState(note);
+  useEffect(() => setForm(note), [note]);
   return (
     <div className="space-y-5">
-      <input value={note.title} onChange={(e) => onSave(note.id, { title: e.target.value })} className="field-input" />
+      <input aria-label="Note title" value={form.title} onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))} className="field-input" />
       <div className="flex flex-wrap gap-2">
         {note.tags.map((tag) => (
           <span key={tag} className="rounded-full border border-[color:color-mix(in_srgb,var(--surface-outline)_55%,transparent_45%)] px-3 py-1 text-sm title-soft">
@@ -1750,10 +1934,12 @@ function NoteEditor({
         ))}
       </div>
       <textarea
-        value={note.content}
-        onChange={(e) => onSave(note.id, { content: e.target.value })}
+        aria-label="Note content"
+        value={form.content}
+        onChange={(e) => setForm((current) => ({ ...current, content: e.target.value }))}
         className="field-input min-h-56"
       />
+      <button type="button" className="small-action primary" onClick={() => onSave(note.id, { title: form.title, content: form.content })}>Save Note Changes</button>
       <div className="grid gap-3 md:grid-cols-3">
         <button type="button" className="soft-outline" onClick={() => onSummarize(note.id)}>
           Summarize
@@ -1823,6 +2009,15 @@ function DraftEditor({
   onSave: (draftId: string, updates: Partial<EmailDraft>) => void;
   onDelete: (draftId: string) => void;
 }) {
+  const [form, setForm] = useState(draft);
+  useEffect(() => setForm(draft), [draft]);
+  const save = (status: EmailDraft["status"]) => onSave(draft.id, {
+    recipient: form.recipient,
+    subject: form.subject,
+    body: form.body,
+    tone: form.tone,
+    status,
+  });
   return (
     <div className="space-y-3">
       <SyncStatusMeta
@@ -1833,20 +2028,21 @@ function DraftEditor({
         localLabel="This draft is still local to Relay"
       />
       <input
-        value={draft.recipient}
-        onChange={(e) => onSave(draft.id, { recipient: e.target.value })}
+        value={form.recipient}
+        onChange={(e) => setForm((current) => ({ ...current, recipient: e.target.value }))}
         placeholder="Recipient"
         className="field-input"
       />
       <input
-        value={draft.subject}
-        onChange={(e) => onSave(draft.id, { subject: e.target.value })}
+        value={form.subject}
+        onChange={(e) => setForm((current) => ({ ...current, subject: e.target.value }))}
         placeholder="Subject"
         className="field-input"
       />
       <select
-        value={draft.tone}
-        onChange={(e) => onSave(draft.id, { tone: e.target.value as EmailDraft["tone"] })}
+        aria-label="Email tone"
+        value={form.tone}
+        onChange={(e) => setForm((current) => ({ ...current, tone: e.target.value as EmailDraft["tone"] }))}
         className="field-input"
       >
         <option value="professional">Professional</option>
@@ -1855,16 +2051,16 @@ function DraftEditor({
         <option value="formal">Formal</option>
       </select>
       <textarea
-        value={draft.body}
-        onChange={(e) => onSave(draft.id, { body: e.target.value })}
+        value={form.body}
+        onChange={(e) => setForm((current) => ({ ...current, body: e.target.value }))}
         placeholder="Draft body"
         className="field-input min-h-56"
       />
       <div className="flex flex-wrap gap-2">
-        <button type="button" className="small-action primary" onClick={() => onSave(draft.id, { status: "approved" })}>
+        <button type="button" className="small-action primary" onClick={() => save("approved")}>
           Save Approved
         </button>
-        <button type="button" className="small-action" onClick={() => onSave(draft.id, { status: "draft" })}>
+        <button type="button" className="small-action" onClick={() => save("draft")}>
           Keep as Draft
         </button>
         <button type="button" className="small-action" onClick={() => onDelete(draft.id)}>
@@ -1878,10 +2074,14 @@ function DraftEditor({
 function CalendarEventEditor({
   event,
   onSave,
+  onRetry,
 }: {
   event: CalendarEvent;
   onSave: (eventId: string, updates: Partial<CalendarEvent>) => void;
+  onRetry: (eventId: string) => void;
 }) {
+  const [form, setForm] = useState(event);
+  useEffect(() => setForm(event), [event]);
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <div className="md:col-span-2">
@@ -1893,16 +2093,27 @@ function CalendarEventEditor({
           localLabel="This event is still local to Relay"
         />
       </div>
-      <input value={event.title} onChange={(e) => onSave(event.id, { title: e.target.value })} className="field-input md:col-span-2" />
-      <input value={event.start} onChange={(e) => onSave(event.id, { start: e.target.value })} className="field-input" />
-      <input value={event.end} onChange={(e) => onSave(event.id, { end: e.target.value })} className="field-input" />
-      <input value={event.location ?? ""} onChange={(e) => onSave(event.id, { location: e.target.value })} className="field-input" />
-      <select value={event.tone} onChange={(e) => onSave(event.id, { tone: e.target.value as CalendarEvent["tone"] })} className="field-input">
+      <input aria-label="Event title" value={form.title} onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))} className="field-input md:col-span-2" />
+      <input aria-label="Event start" value={form.start} onChange={(e) => setForm((current) => ({ ...current, start: e.target.value }))} className="field-input" />
+      <input aria-label="Event end" value={form.end} onChange={(e) => setForm((current) => ({ ...current, end: e.target.value }))} className="field-input" />
+      <input aria-label="Event location" value={form.location ?? ""} onChange={(e) => setForm((current) => ({ ...current, location: e.target.value }))} className="field-input" />
+      <select aria-label="Event color" value={form.tone} onChange={(e) => setForm((current) => ({ ...current, tone: e.target.value as CalendarEvent["tone"] }))} className="field-input">
         <option value="teal">Teal</option>
         <option value="gold">Gold</option>
         <option value="rose">Rose</option>
       </select>
-      <textarea value={event.detail} onChange={(e) => onSave(event.id, { detail: e.target.value })} className="field-input min-h-32 md:col-span-2" />
+      <textarea aria-label="Event details" value={form.detail} onChange={(e) => setForm((current) => ({ ...current, detail: e.target.value }))} className="field-input min-h-32 md:col-span-2" />
+      <button type="button" className="small-action primary md:col-span-2" onClick={() => onSave(event.id, {
+        title: form.title,
+        start: form.start,
+        end: form.end,
+        location: form.location,
+        tone: form.tone,
+        detail: form.detail,
+      })}>Save Event Changes</button>
+      {event.externalId && event.syncStatus !== "synced" ? (
+        <button type="button" className="small-action primary md:col-span-2" onClick={() => onRetry(event.id)}>{event.syncStatus === "failed" ? "Retry Google Calendar Sync" : "Sync Changes to Google"}</button>
+      ) : null}
     </div>
   );
 }

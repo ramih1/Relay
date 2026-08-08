@@ -1,11 +1,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { Prisma } from "@prisma/client";
 import { classifyCommand } from "@/lib/ai/classify-command";
 import { AIProviderError, getAIUnavailableMessage } from "@/lib/ai/errors";
 import { getOllamaConfig } from "@/lib/ai/ollama-provider";
 import {
   createGoogleCalendarEvent,
   createGoogleGmailDraft,
+  deleteGoogleCalendarEvent,
+  deleteGoogleGmailDraft,
   getGoogleConnectionStatus,
   getGoogleWorkspaceConfig,
 } from "@/lib/server/google-workspace";
@@ -18,6 +21,8 @@ import {
   initialReminders,
   initialTasks,
 } from "@/lib/data";
+import { prisma } from "@/lib/db/prisma";
+import { updateUserAccount, usesDatabase } from "@/lib/server/auth";
 import type {
   ActionLogEntry,
   AssistantRequestEntry,
@@ -28,16 +33,17 @@ import type {
   Reminder,
   RuntimeStatus,
   Task,
+  AuthUser,
 } from "@/lib/types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
-const STATE_FILE = path.join(DATA_DIR, "relay-state.json");
+const stateFileFor = (userId: string) => path.join(DATA_DIR, `relay-state-${userId.replace(/[^a-zA-Z0-9_-]/g, "_")}.json`);
 
 function getRuntimeStatus(): RuntimeStatus {
   const googleWorkspace = getGoogleWorkspaceConfig();
 
   return {
-    storageMode: "file",
+    storageMode: usesDatabase() ? "database" : "file",
     databaseConfigured: Boolean(process.env.DATABASE_URL),
     ollamaConfigured: Boolean(process.env.OLLAMA_BASE_URL || process.env.OLLAMA_MODEL),
     ollamaModel: getOllamaConfig().model,
@@ -47,11 +53,11 @@ function getRuntimeStatus(): RuntimeStatus {
   };
 }
 
-async function resolveRuntimeStatus(): Promise<RuntimeStatus> {
-  const googleWorkspace = await getGoogleConnectionStatus();
+async function resolveRuntimeStatus(userId: string): Promise<RuntimeStatus> {
+  const googleWorkspace = await getGoogleConnectionStatus(userId);
 
   return {
-    storageMode: "file",
+    storageMode: usesDatabase() ? "database" : "file",
     databaseConfigured: Boolean(process.env.DATABASE_URL),
     ollamaConfigured: Boolean(process.env.OLLAMA_BASE_URL || process.env.OLLAMA_MODEL),
     ollamaModel: getOllamaConfig().model,
@@ -61,13 +67,15 @@ async function resolveRuntimeStatus(): Promise<RuntimeStatus> {
   };
 }
 
-function createInitialState(): RelayStateSnapshot {
+function createInitialState(user?: AuthUser): RelayStateSnapshot {
   return {
     tasks: structuredClone(initialTasks),
     notes: structuredClone(initialNotes),
     reminders: structuredClone(initialReminders),
     calendarEvents: structuredClone(initialCalendarEvents),
     notifications: structuredClone(initialNotifications),
+    workouts: [],
+    meals: [],
     drafts: structuredClone(initialEmailDrafts),
     pendingActions: structuredClone(initialPendingActions),
     assistantFeed: [
@@ -91,9 +99,9 @@ function createInitialState(): RelayStateSnapshot {
       approvalsLocked: true,
     },
     profile: {
-      name: "Rami",
-      email: "rami@example.com",
-      role: "Student",
+      name: user?.name ?? "Relay User",
+      email: user?.email ?? "user@example.com",
+      role: user?.role ?? "Member",
     },
     integrations: {
       calendar: true,
@@ -101,61 +109,95 @@ function createInitialState(): RelayStateSnapshot {
       shareContextWithAi: true,
     },
     session: {
-      isAuthenticated: false,
+      isAuthenticated: Boolean(user),
+      userId: user?.id,
+      lastActiveAt: user ? new Date().toISOString() : undefined,
     },
     runtime: getRuntimeStatus(),
   };
 }
 
-let inMemoryState: RelayStateSnapshot | null = null;
+const inMemoryStates = new Map<string, RelayStateSnapshot>();
+const mutationQueues = new Map<string, Promise<void>>();
+
+async function withUserMutation<T>(userId: string, mutation: () => Promise<T>): Promise<T> {
+  const previous = mutationQueues.get(userId) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  const queued = previous.then(() => current);
+  mutationQueues.set(userId, queued);
+  await previous;
+  try {
+    return await mutation();
+  } finally {
+    release();
+    if (mutationQueues.get(userId) === queued) mutationQueues.delete(userId);
+  }
+}
 
 async function ensureDataDir() {
   await mkdir(DATA_DIR, { recursive: true });
 }
 
-async function persistState(state: RelayStateSnapshot) {
+async function persistState(userId: string, state: RelayStateSnapshot) {
+  if (usesDatabase()) {
+    const data = JSON.parse(JSON.stringify(state)) as Prisma.InputJsonValue;
+    await prisma.workspaceState.upsert({
+      where: { userId },
+      create: { userId, data },
+      update: { data, version: { increment: 1 } },
+    });
+    return;
+  }
   await ensureDataDir();
-  await writeFile(STATE_FILE, JSON.stringify(state, null, 2), "utf8");
+  await writeFile(stateFileFor(userId), JSON.stringify(state, null, 2), { encoding: "utf8", mode: 0o600 });
 }
 
-async function loadState(): Promise<RelayStateSnapshot> {
-  if (inMemoryState) {
-    return inMemoryState;
+async function loadState(user: AuthUser): Promise<RelayStateSnapshot> {
+  const cached = inMemoryStates.get(user.id);
+  if (cached) {
+    cached.runtime = await resolveRuntimeStatus(user.id);
+    cached.session = { isAuthenticated: true, userId: user.id, lastActiveAt: new Date().toISOString() };
+    return cached;
   }
 
   try {
-    const raw = await readFile(STATE_FILE, "utf8");
-    const parsed = JSON.parse(raw) as Partial<RelayStateSnapshot>;
-    inMemoryState = {
-      ...createInitialState(),
+    const parsed = usesDatabase()
+      ? ((await prisma.workspaceState.findUnique({ where: { userId: user.id } }))?.data as Partial<RelayStateSnapshot> | undefined)
+      : (JSON.parse(await readFile(stateFileFor(user.id), "utf8")) as Partial<RelayStateSnapshot>);
+    if (!parsed) throw new Error("Workspace not initialized");
+    const state: RelayStateSnapshot = {
+      ...createInitialState(user),
       ...parsed,
+      workouts: parsed.workouts ?? [],
+      meals: parsed.meals ?? [],
       actionLog: parsed.actionLog ?? [],
       preferences: {
-        ...createInitialState().preferences,
+        ...createInitialState(user).preferences,
         ...parsed.preferences,
       },
       profile: {
-        ...createInitialState().profile,
+        ...createInitialState(user).profile,
         ...parsed.profile,
+        name: user.name,
+        email: user.email,
+        role: user.role,
       },
       integrations: {
-        ...createInitialState().integrations,
+        ...createInitialState(user).integrations,
         ...parsed.integrations,
       },
-      session: {
-        ...createInitialState().session,
-        ...parsed.session,
-      },
-      runtime: await resolveRuntimeStatus(),
+      session: { isAuthenticated: true, userId: user.id, lastActiveAt: new Date().toISOString() },
+      runtime: await resolveRuntimeStatus(user.id),
     };
+    inMemoryStates.set(user.id, state);
   } catch {
-    inMemoryState = createInitialState();
-    await persistState(inMemoryState);
+    const state = createInitialState(user);
+    inMemoryStates.set(user.id, state);
+    await persistState(user.id, state);
   }
 
-  inMemoryState.runtime = await resolveRuntimeStatus();
-
-  return inMemoryState;
+  return inMemoryStates.get(user.id)!;
 }
 
 function appendFeed(state: RelayStateSnapshot, message: string) {
@@ -204,7 +246,7 @@ function buildAssistantContext(state: RelayStateSnapshot) {
   };
 }
 
-async function syncDraftIfConfigured(state: RelayStateSnapshot, draftId: string) {
+async function syncDraftIfConfigured(userId: string, state: RelayStateSnapshot, draftId: string) {
   if (!state.runtime.gmailConfigured) {
     return;
   }
@@ -228,7 +270,7 @@ async function syncDraftIfConfigured(state: RelayStateSnapshot, draftId: string)
   }
 
   try {
-    const result = await createGoogleGmailDraft(draft, state.profile.email);
+    const result = await createGoogleGmailDraft(userId, draft, state.profile.email);
     state.drafts = state.drafts.map((item) =>
       item.id === draftId
         ? {
@@ -265,7 +307,7 @@ async function syncDraftIfConfigured(state: RelayStateSnapshot, draftId: string)
   }
 }
 
-async function syncCalendarEventIfConfigured(state: RelayStateSnapshot, eventId: string) {
+async function syncCalendarEventIfConfigured(userId: string, state: RelayStateSnapshot, eventId: string) {
   if (!state.runtime.calendarConfigured) {
     return;
   }
@@ -276,7 +318,7 @@ async function syncCalendarEventIfConfigured(state: RelayStateSnapshot, eventId:
   }
 
   try {
-    const result = await createGoogleCalendarEvent(event);
+    const result = await createGoogleCalendarEvent(userId, event);
     state.calendarEvents = state.calendarEvents.map((item) =>
       item.id === eventId
         ? {
@@ -313,7 +355,7 @@ async function syncCalendarEventIfConfigured(state: RelayStateSnapshot, eventId:
   }
 }
 
-async function submitCommand(state: RelayStateSnapshot, rawInput: string, timezone = process.env.TZ || "America/Toronto") {
+async function submitCommand(userId: string, state: RelayStateSnapshot, rawInput: string, timezone = process.env.TZ || "America/Toronto") {
   const input = rawInput.trim();
   if (!input) {
     return;
@@ -362,7 +404,7 @@ async function submitCommand(state: RelayStateSnapshot, rawInput: string, timezo
 
   if (!state.preferences.approvalsLocked && plan.pendingActions?.every((action) => action.risk === "low")) {
     for (const action of plan.pendingActions) {
-      void approveAction(state, action.id);
+      void approveAction(userId, state, action.id);
     }
 
     appendFeed(state, "Low-risk approval lock is off, so I applied that safe action directly.");
@@ -375,7 +417,7 @@ async function submitCommand(state: RelayStateSnapshot, rawInput: string, timezo
   }
 }
 
-async function approveAction(state: RelayStateSnapshot, actionId: string) {
+async function approveAction(userId: string, state: RelayStateSnapshot, actionId: string) {
   const action = state.pendingActions.find((item) => item.id === actionId);
   if (!action || action.status !== "pending") {
     return;
@@ -441,7 +483,7 @@ async function approveAction(state: RelayStateSnapshot, actionId: string) {
       },
       ...state.calendarEvents,
     ];
-    await syncCalendarEventIfConfigured(state, createdEventId);
+    await syncCalendarEventIfConfigured(userId, state, createdEventId);
   }
 
   if (action.type === "draft_email") {
@@ -455,7 +497,7 @@ async function approveAction(state: RelayStateSnapshot, actionId: string) {
           }
         : draft,
     );
-    await syncDraftIfConfigured(state, draftId);
+    await syncDraftIfConfigured(userId, state, draftId);
   }
 
   state.pendingActions = state.pendingActions.map((item) =>
@@ -508,49 +550,36 @@ function updatePendingAction(state: RelayStateSnapshot, actionId: string, update
   }
 }
 
-export async function getRelayState(): Promise<RelayStateSnapshot> {
-  return structuredClone(await loadState());
+export async function getRelayState(user: AuthUser): Promise<RelayStateSnapshot> {
+  return structuredClone(await loadState(user));
 }
 
-export async function resetRelayState() {
-  const previousSession = (await loadState()).session;
-  inMemoryState = {
-    ...createInitialState(),
-    session: previousSession,
-  };
-  await persistState(inMemoryState);
-  return getRelayState();
+export async function resetRelayState(user: AuthUser) {
+  return withUserMutation(user.id, async () => {
+    const previousSession = (await loadState(user)).session;
+    const state = {
+      ...createInitialState(user),
+      session: previousSession,
+    };
+    inMemoryStates.set(user.id, state);
+    await persistState(user.id, state);
+    return getRelayState(user);
+  });
 }
 
-export async function submitRelayCommand(input: string, timezone?: string) {
-  const state = await loadState();
-  if (!state.session.isAuthenticated) {
-    return applyRelayMutation({ type: "submit_command", input });
-  }
-  await submitCommand(state, input, timezone);
-  inMemoryState = state;
-  await persistState(state);
-  return getRelayState();
+export async function submitRelayCommand(user: AuthUser, input: string, timezone?: string) {
+  return withUserMutation(user.id, async () => {
+    const state = await loadState(user);
+    await submitCommand(user.id, state, input, timezone);
+    inMemoryStates.set(user.id, state);
+    await persistState(user.id, state);
+    return getRelayState(user);
+  });
 }
 
-export async function applyRelayMutation(input: RelayMutationRequest): Promise<RelayStateSnapshot> {
-  const state = await loadState();
-
-  if (
-    !state.session.isAuthenticated &&
-    input.type !== "sign_in"
-  ) {
-    appendFeed(state, "Sign in to continue using the Relay workspace.");
-    recordEvent(state, {
-      title: "Blocked mutation while signed out",
-      detail: input.type,
-      category: "system",
-      impact: "warning",
-    });
-    inMemoryState = state;
-    await persistState(state);
-    return getRelayState();
-  }
+export async function applyRelayMutation(user: AuthUser, input: RelayMutationRequest): Promise<RelayStateSnapshot> {
+  return withUserMutation(user.id, async () => {
+    const state = await loadState(user);
 
   switch (input.type) {
     case "reset_state": {
@@ -561,48 +590,25 @@ export async function applyRelayMutation(input: RelayMutationRequest): Promise<R
         session: state.session,
       };
 
-      inMemoryState = {
-        ...createInitialState(),
+      const resetState = {
+        ...createInitialState(user),
         ...preserved,
       };
-      recordEvent(inMemoryState, {
+      inMemoryStates.set(user.id, resetState);
+      recordEvent(resetState, {
         title: "Demo workspace restored",
         detail: "Reset the demo data while keeping the signed-in workspace settings and identity.",
         category: "system",
         impact: "warning",
       });
-      await persistState(inMemoryState);
-      return getRelayState();
+      await persistState(user.id, resetState);
+      return getRelayState(user);
     }
     case "submit_command":
-      await submitCommand(state, input.input);
-      break;
-    case "sign_in":
-      state.session = {
-        isAuthenticated: true,
-        lastActiveAt: new Date().toISOString(),
-      };
-      recordEvent(state, {
-        title: "Signed in",
-        detail: `${state.profile.name} entered the workspace`,
-        category: "system",
-        impact: "success",
-      });
-      break;
-    case "sign_out":
-      state.session = {
-        isAuthenticated: false,
-        lastActiveAt: new Date().toISOString(),
-      };
-      recordEvent(state, {
-        title: "Signed out",
-        detail: `${state.profile.name} left the workspace`,
-        category: "system",
-        impact: "warning",
-      });
+      await submitCommand(user.id, state, input.input);
       break;
     case "approve_action":
-      await approveAction(state, input.actionId);
+      await approveAction(user.id, state, input.actionId);
       break;
     case "cancel_action":
       cancelAction(state, input.actionId);
@@ -807,7 +813,7 @@ export async function applyRelayMutation(input: RelayMutationRequest): Promise<R
           },
           ...state.calendarEvents,
         ];
-        await syncCalendarEventIfConfigured(state, calendarEventId);
+        await syncCalendarEventIfConfigured(user.id, state, calendarEventId);
       }
       appendFeed(state, `Added a calendar event: ${input.input.title}.`);
       recordEvent(state, {
@@ -821,7 +827,9 @@ export async function applyRelayMutation(input: RelayMutationRequest): Promise<R
       {
         const event = state.calendarEvents.find((item) => item.id === input.eventId);
         state.calendarEvents = state.calendarEvents.map((item) =>
-          item.id === input.eventId ? { ...item, ...input.updates } : item,
+          item.id === input.eventId
+            ? { ...item, ...input.updates, syncStatus: item.externalId && state.runtime.calendarConfigured ? "local" : item.syncStatus }
+            : item,
         );
         if (event) {
           recordEvent(state, {
@@ -836,6 +844,19 @@ export async function applyRelayMutation(input: RelayMutationRequest): Promise<R
     case "delete_calendar_event":
       {
         const event = state.calendarEvents.find((item) => item.id === input.eventId);
+        if (event?.externalId && state.runtime.calendarConfigured) {
+          try {
+            await deleteGoogleCalendarEvent(user.id, event.externalId);
+          } catch (error) {
+            state.calendarEvents = state.calendarEvents.map((item) => item.id === input.eventId ? {
+              ...item,
+              syncStatus: "failed",
+              syncError: error instanceof Error ? error.message : "Failed to delete Google Calendar event.",
+            } : item);
+            recordEvent(state, { title: "Calendar deletion blocked", detail: event.title, category: "system", impact: "warning" });
+            break;
+          }
+        }
         state.calendarEvents = state.calendarEvents.filter((event) => event.id !== input.eventId);
         if (event) {
           recordEvent(state, {
@@ -846,6 +867,10 @@ export async function applyRelayMutation(input: RelayMutationRequest): Promise<R
           });
         }
       }
+      break;
+    case "retry_calendar_sync":
+      state.calendarEvents = state.calendarEvents.map((event) => event.id === input.eventId ? { ...event, syncStatus: "local", syncError: undefined } : event);
+      await syncCalendarEventIfConfigured(user.id, state, input.eventId);
       break;
     case "mark_notification_read":
       {
@@ -911,6 +936,30 @@ export async function applyRelayMutation(input: RelayMutationRequest): Promise<R
         }
       }
       break;
+    case "add_workout":
+      state.workouts = [{ id: crypto.randomUUID(), ...input.input }, ...state.workouts];
+      recordEvent(state, {
+        title: "Workout logged",
+        detail: `${input.input.activity} • ${input.input.durationMinutes} minutes`,
+        category: "productivity",
+        impact: "success",
+      });
+      break;
+    case "delete_workout":
+      state.workouts = state.workouts.filter((workout) => workout.id !== input.workoutId);
+      break;
+    case "add_meal":
+      state.meals = [{ id: crypto.randomUUID(), ...input.input }, ...state.meals];
+      recordEvent(state, {
+        title: "Meal logged",
+        detail: `${input.input.name} • ${input.input.calories} calories`,
+        category: "productivity",
+        impact: "success",
+      });
+      break;
+    case "delete_meal":
+      state.meals = state.meals.filter((meal) => meal.id !== input.mealId);
+      break;
     case "save_draft":
       {
         const draft = state.drafts.find((item) => item.id === input.draftId);
@@ -934,14 +983,27 @@ export async function applyRelayMutation(input: RelayMutationRequest): Promise<R
             impact: "info",
           });
         }
-        if ((input.updates.status === "approved" || draft?.status === "approved") && draft) {
-          await syncDraftIfConfigured(state, input.draftId);
+        if (input.updates.status === "approved" && draft) {
+          await syncDraftIfConfigured(user.id, state, input.draftId);
         }
       }
       break;
     case "delete_draft":
       {
         const draft = state.drafts.find((item) => item.id === input.draftId);
+        if (draft?.externalId && state.runtime.gmailConfigured) {
+          try {
+            await deleteGoogleGmailDraft(user.id, draft.externalId);
+          } catch (error) {
+            state.drafts = state.drafts.map((item) => item.id === input.draftId ? {
+              ...item,
+              syncStatus: "failed",
+              syncError: error instanceof Error ? error.message : "Failed to delete Gmail draft.",
+            } : item);
+            recordEvent(state, { title: "Gmail draft deletion blocked", detail: draft.subject, category: "system", impact: "warning" });
+            break;
+          }
+        }
       state.drafts = state.drafts.filter((draft) => draft.id !== input.draftId);
         if (draft) {
           recordEvent(state, {
@@ -966,6 +1028,7 @@ export async function applyRelayMutation(input: RelayMutationRequest): Promise<R
       });
       break;
     case "update_profile":
+      await updateUserAccount(user.id, input.updates);
       state.profile = {
         ...state.profile,
         ...input.updates,
@@ -991,7 +1054,8 @@ export async function applyRelayMutation(input: RelayMutationRequest): Promise<R
       break;
   }
 
-  inMemoryState = state;
-  await persistState(state);
-  return getRelayState();
+    inMemoryStates.set(user.id, state);
+    await persistState(user.id, state);
+    return getRelayState(user);
+  });
 }

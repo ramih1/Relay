@@ -1,5 +1,6 @@
 import { getRelayState } from "@/lib/server/relay-store";
 import type { DashboardInsightSnapshot, NotificationItem } from "@/lib/types";
+import type { AuthUser } from "@/lib/types";
 
 const notificationRank: Record<NotificationItem["category"], number> = {
   urgent: 0,
@@ -8,8 +9,8 @@ const notificationRank: Record<NotificationItem["category"], number> = {
   low: 3,
 };
 
-export async function getDashboardInsights(): Promise<DashboardInsightSnapshot> {
-  const state = await getRelayState();
+export async function getDashboardInsights(user: AuthUser): Promise<DashboardInsightSnapshot> {
+  const state = await getRelayState(user);
   if (!state.integrations.shareContextWithAi) {
     return {
       dailyBrief: `${state.profile.name}, context sharing is off, so today's brief is privacy-limited.`,

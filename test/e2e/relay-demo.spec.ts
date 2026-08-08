@@ -1,12 +1,21 @@
 import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 async function enterWorkspace(page: import("@playwright/test").Page) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const signIn = page.getByRole("button", { name: "Continue into Relay" });
-  if (await signIn.isVisible().catch(() => false)) await signIn.click();
+  const dashboard = page.getByLabel("Relay dashboard");
+  await expect(signIn.or(dashboard)).toBeVisible({ timeout: 15_000 });
+  if (await signIn.isVisible()) {
+    await page.getByRole("button", { name: "Create account" }).click();
+    await page.getByLabel("Name").fill("Relay Test User");
+    await page.getByLabel("Email").fill(`relay-e2e-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`);
+    await page.getByLabel("Password").fill("RelayTest1234");
+    await page.getByRole("button", { name: "Create secure workspace" }).click();
+  }
   await expect(page).toHaveTitle("Relay");
-  await expect(page.getByLabel("Relay dashboard")).toBeVisible();
+  await expect(dashboard).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("heading", { name: "Daily Focus" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Approval Safety" })).toBeVisible();
 }
@@ -73,4 +82,54 @@ test("mobile dashboard exposes navigation, voice input, and notes", async ({ pag
 
   await page.goto("/notes");
   await expect(page.getByText("Note Library", { exact: true })).toBeVisible();
+});
+
+test("authenticated application has no serious accessibility violations", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Accessibility audit runs once on desktop.");
+  await enterWorkspace(page);
+  const failures: Array<{ route: string; id: string; impact: string | null | undefined }> = [];
+  for (const route of ["/", "/assistant", "/tasks", "/notes", "/reminders", "/calendar", "/workouts", "/nutrition", "/confirmations", "/notifications", "/settings"]) {
+    await page.goto(route);
+    const results = await new AxeBuilder({ page }).analyze();
+    failures.push(...results.violations
+      .filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))
+      .map((violation) => ({ route, id: violation.id, impact: violation.impact })));
+  }
+  expect(failures).toEqual([]);
+});
+
+test("health logs persist across workout and nutrition routes", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Health workflow runs once on desktop.");
+  await enterWorkspace(page);
+  await page.goto("/workouts");
+  await page.getByLabel("Activity").fill("Recovery walk");
+  await page.getByLabel("Duration (minutes)").fill("25");
+  await page.getByRole("button", { name: "Save Workout" }).click();
+  await expect(page.getByText("Recovery walk", { exact: true })).toBeVisible();
+
+  await page.goto("/nutrition");
+  await page.getByLabel("Meal or food").fill("Yogurt bowl");
+  await page.getByLabel("Calories").fill("420");
+  await page.getByRole("button", { name: "Save Meal" }).click();
+  await expect(page.getByText("Yogurt bowl", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("Yogurt bowl", { exact: true })).toBeVisible();
+});
+
+test("separate accounts cannot read each other's workspace", async ({ page, browser }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "User isolation runs once on desktop.");
+  await enterWorkspace(page);
+  const privateTask = `Private task ${Date.now()}`;
+  await page.goto("/tasks");
+  await page.getByPlaceholder("Task title").fill(privateTask);
+  await page.getByPlaceholder("Due time, like Friday 5 PM").fill("Tomorrow, 5 PM");
+  await page.getByRole("button", { name: "Create Task" }).click();
+  await expect(page.getByText(privateTask, { exact: true })).toBeVisible();
+
+  const secondContext = await browser.newContext();
+  const secondPage = await secondContext.newPage();
+  await enterWorkspace(secondPage);
+  await secondPage.goto("/tasks");
+  await expect(secondPage.getByText(privateTask, { exact: true })).toHaveCount(0);
+  await secondContext.close();
 });

@@ -120,6 +120,7 @@ async function googleRequest<T>(url: string, accessToken: string, init?: Request
     throw new Error(detail || `Google API request failed with ${response.status}`);
   }
 
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -128,8 +129,8 @@ export function getGoogleWorkspaceConfig() {
 
   return {
     googleOAuthConfigured: oauthConfigured,
-    gmailConfigured: Boolean(process.env.GOOGLE_GMAIL_ACCESS_TOKEN),
-    calendarConfigured: Boolean(process.env.GOOGLE_CALENDAR_ACCESS_TOKEN),
+    gmailConfigured: false,
+    calendarConfigured: false,
   };
 }
 
@@ -155,7 +156,7 @@ function redirectUriFrom(requestUrl?: string) {
   return new URL("/api/google/callback", requestUrl).toString();
 }
 
-async function refreshGoogleAccessToken(refreshToken: string) {
+async function refreshGoogleAccessToken(userId: string, refreshToken: string) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -187,7 +188,7 @@ async function refreshGoogleAccessToken(refreshToken: string) {
     token_type?: string;
   };
 
-  const current = await getGoogleTokens();
+  const current = await getGoogleTokens(userId);
   const nextTokens = {
     accessToken: data.access_token,
     refreshToken,
@@ -196,23 +197,12 @@ async function refreshGoogleAccessToken(refreshToken: string) {
     tokenType: data.token_type ?? current?.tokenType,
   };
 
-  await saveGoogleTokens(nextTokens);
+  await saveGoogleTokens(userId, nextTokens);
   return nextTokens;
 }
 
-export async function getGoogleAccessToken(requiredScopes: string[]) {
-  const envToken =
-    requiredScopes.includes(gmailScope) && !requiredScopes.includes(calendarScope)
-      ? process.env.GOOGLE_GMAIL_ACCESS_TOKEN
-      : requiredScopes.includes(calendarScope) && !requiredScopes.includes(gmailScope)
-        ? process.env.GOOGLE_CALENDAR_ACCESS_TOKEN
-        : undefined;
-
-  if (envToken) {
-    return envToken;
-  }
-
-  const tokens = await getGoogleTokens();
+export async function getGoogleAccessToken(userId: string, requiredScopes: string[]) {
+  const tokens = await getGoogleTokens(userId);
   if (!tokens?.accessToken) {
     throw new Error("Google Workspace is not connected yet.");
   }
@@ -226,16 +216,16 @@ export async function getGoogleAccessToken(requiredScopes: string[]) {
     if (!tokens.refreshToken) {
       throw new Error("Google access token expired and no refresh token is available. Reconnect Google Workspace.");
     }
-    const refreshed = await refreshGoogleAccessToken(tokens.refreshToken);
+    const refreshed = await refreshGoogleAccessToken(userId, tokens.refreshToken);
     return refreshed.accessToken;
   }
 
   return tokens.accessToken;
 }
 
-export async function getGoogleConnectionStatus() {
+export async function getGoogleConnectionStatus(userId: string) {
   const config = getGoogleWorkspaceConfig();
-  const tokens = await getGoogleTokens();
+  const tokens = await getGoogleTokens(userId);
   const scopes = tokens?.scope ?? [];
 
   return {
@@ -246,7 +236,7 @@ export async function getGoogleConnectionStatus() {
   };
 }
 
-export async function buildGoogleConnectUrl(service: GoogleOAuthService, requestUrl: string, redirectPath?: string) {
+export async function buildGoogleConnectUrl(userId: string, service: GoogleOAuthService, requestUrl: string, redirectPath?: string) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
     throw new Error("GOOGLE_CLIENT_ID is not configured.");
@@ -254,7 +244,7 @@ export async function buildGoogleConnectUrl(service: GoogleOAuthService, request
 
   const nonce = crypto.randomUUID();
   const redirectUri = redirectUriFrom(requestUrl);
-  await savePendingGoogleOAuth({
+  await savePendingGoogleOAuth(userId, {
     nonce,
     service,
     redirectPath,
@@ -274,8 +264,8 @@ export async function buildGoogleConnectUrl(service: GoogleOAuthService, request
   return url.toString();
 }
 
-export async function exchangeGoogleCode(code: string, state: string, requestUrl: string) {
-  const pending = await consumePendingGoogleOAuth(state);
+export async function exchangeGoogleCode(userId: string, code: string, state: string, requestUrl: string) {
+  const pending = await consumePendingGoogleOAuth(userId, state);
   if (!pending) {
     throw new Error("Google OAuth state is invalid or expired.");
   }
@@ -313,9 +303,9 @@ export async function exchangeGoogleCode(code: string, state: string, requestUrl
     token_type?: string;
   };
 
-  const current = await getGoogleTokens();
+  const current = await getGoogleTokens(userId);
 
-  await saveGoogleTokens({
+  await saveGoogleTokens(userId, {
     accessToken: data.access_token,
     refreshToken: data.refresh_token ?? current?.refreshToken,
     scope: data.scope ? data.scope.split(" ") : requiredScopesFor(pending.service),
@@ -326,19 +316,22 @@ export async function exchangeGoogleCode(code: string, state: string, requestUrl
   return pending;
 }
 
-export async function disconnectGoogleWorkspace() {
-  await clearGoogleTokens();
+export async function disconnectGoogleWorkspace(userId: string) {
+  await clearGoogleTokens(userId);
 }
 
-export async function createGoogleGmailDraft(draft: EmailDraft, fromEmail?: string): Promise<GoogleDraftResult> {
-  const accessToken = await getGoogleAccessToken([gmailScope]);
+export async function createGoogleGmailDraft(userId: string, draft: EmailDraft, fromEmail?: string): Promise<GoogleDraftResult> {
+  const accessToken = await getGoogleAccessToken(userId, [gmailScope]);
 
   const raw = encodeBase64Url(buildMimeDraft(draft, fromEmail));
+  const endpoint = draft.externalId
+    ? `https://gmail.googleapis.com/gmail/v1/users/me/drafts/${encodeURIComponent(draft.externalId)}`
+    : "https://gmail.googleapis.com/gmail/v1/users/me/drafts";
   const result = await googleRequest<{ id: string; message?: { id?: string } }>(
-    "https://gmail.googleapis.com/gmail/v1/users/me/drafts",
+    endpoint,
     accessToken,
     {
-      method: "POST",
+      method: draft.externalId ? "PUT" : "POST",
       body: JSON.stringify({
         message: {
           raw,
@@ -353,14 +346,24 @@ export async function createGoogleGmailDraft(draft: EmailDraft, fromEmail?: stri
   };
 }
 
-export async function createGoogleCalendarEvent(event: CalendarEvent): Promise<GoogleCalendarResult> {
-  const accessToken = await getGoogleAccessToken([calendarScope]);
+export async function deleteGoogleGmailDraft(userId: string, externalId: string) {
+  const accessToken = await getGoogleAccessToken(userId, [gmailScope]);
+  await googleRequest<void>(
+    `https://gmail.googleapis.com/gmail/v1/users/me/drafts/${encodeURIComponent(externalId)}`,
+    accessToken,
+    { method: "DELETE" },
+  );
+}
+
+export async function createGoogleCalendarEvent(userId: string, event: CalendarEvent): Promise<GoogleCalendarResult> {
+  const accessToken = await getGoogleAccessToken(userId, [calendarScope]);
+  const baseUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
 
   const result = await googleRequest<{ id: string; htmlLink?: string }>(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+    event.externalId ? `${baseUrl}/${encodeURIComponent(event.externalId)}` : baseUrl,
     accessToken,
     {
-      method: "POST",
+      method: event.externalId ? "PATCH" : "POST",
       body: JSON.stringify({
         summary: event.title,
         description: event.detail,
@@ -381,4 +384,13 @@ export async function createGoogleCalendarEvent(event: CalendarEvent): Promise<G
     id: result.id,
     htmlLink: result.htmlLink,
   };
+}
+
+export async function deleteGoogleCalendarEvent(userId: string, externalId: string) {
+  const accessToken = await getGoogleAccessToken(userId, [calendarScope]);
+  await googleRequest<void>(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(externalId)}`,
+    accessToken,
+    { method: "DELETE" },
+  );
 }

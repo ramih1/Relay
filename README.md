@@ -1,220 +1,149 @@
 # Relay
 
-Relay is a dashboard-first AI productivity assistant built with transparent approvals at the center of the workflow.
+Relay is an approval-first AI productivity command center for tasks, notes, reminders, calendars, email drafts, notifications, workouts, and nutrition logs.
 
-The current MVP already supports:
+## Features
 
-- dashboard brief and assistant command bar
-- tasks, notes, reminders, calendar events, notifications
-- approval queue for important actions
-- email draft proposals
-- optional Gmail draft sync when a Google access token is configured
-- optional Google Calendar event sync when a Google access token is configured
-- browser voice input with review before submission
-- persisted profile, preferences, permissions, and workspace session
+- Vision-inspired responsive dashboard with reduced-motion support and theme options
+- Real email/password accounts with scrypt password hashing and expiring HTTP-only sessions
+- User-isolated PostgreSQL persistence through Prisma 7, with a file-backed local development mode
+- Local Ollama assistant that creates Zod-validated proposals instead of silently changing data
+- Editable confirmation queue with deterministic risk levels and an audit trail
+- Tasks, notes, reminders, calendar events, notification ranking, and email drafts
+- Per-user Google OAuth with encrypted tokens, Gmail draft creation, Calendar event creation, token refresh, disconnect, and retry states
+- Review-first browser voice input
+- Workout history, weekly movement summaries, calorie and optional macro tracking
+- Health endpoint, structured server errors, security headers, CI, Docker, and Vercel configuration
 
-## Current Runtime
+Calls and call-related data have been removed from the product.
 
-Right now the app is fully functional in a file-backed MVP mode:
+## Stack
 
-- UI: Next.js + React + TypeScript + Tailwind CSS
-- server: Next.js route handlers
-- persistence: local JSON state file under `data/relay-state.json`
-- AI provider: local Ollama inference through `lib/ai/ollama-provider.ts`
-- AI safety: Zod-validated proposals routed into the confirmation center
+- Next.js 15, React 19, TypeScript, Tailwind CSS
+- PostgreSQL, Prisma 7, `@prisma/adapter-pg`
+- Local Ollama using `qwen3:1.7b` by default
+- Zod, Playwright, and Axe
 
-Prisma and PostgreSQL are scaffolded for the next backend step, but the app does not require Postgres to run today.
+## Lightweight Local Mode
 
-## Local Demo From GitHub
-
-Relay is designed to be demoed locally from the GitHub repository. No deployment account, hosted database, domain, or paid AI API is required for the demo.
-
-1. Clone the repository and enter the project:
+This mode is best for an 8 GB Mac and does not require PostgreSQL.
 
 ```bash
-git clone https://github.com/98-rami/Relay.git
+git clone https://github.com/ramih1/Relay.git
 cd Relay
 pnpm install
 cp .env.example .env.local
 ollama pull qwen3:1.7b
 ```
 
-2. Start Ollama and leave this terminal open:
+Remove or leave `DATABASE_URL` blank in `.env.local`, then run Ollama and Relay in separate terminals:
 
 ```bash
 ollama serve
 ```
 
-3. In another terminal, start Relay:
-
 ```bash
-cd Relay
 pnpm dev
 ```
 
-4. Open `http://localhost:3000` and sign in through the demo workspace gate.
+Open `http://localhost:3000`, create an account, and use Relay. Local passwords are scrypt-hashed, sessions are random and HTTP-only, and each account receives a separate ignored workspace file under `data/`.
 
-Relay runs entirely on your Mac. Ollama provides the local AI model, and local JSON files store demo data between browser refreshes. Google OAuth can optionally connect Gmail Drafts and Google Calendar; without it, those features stay local-only.
+## PostgreSQL Mode
 
-No Vercel deployment, hosted database, or paid AI API is needed. Keep the laptop running, `ollama serve` active, and the Relay development server open during the demo.
-
-The default `qwen3:1.7b` model and 2,048-token context are tuned for responsive use on 8 GB Macs. You can select a different installed Ollama model by changing `OLLAMA_MODEL` in `.env.local`.
-
-## Quick Start
-
-1. Install dependencies:
+Production requires PostgreSQL. For local PostgreSQL with Docker:
 
 ```bash
-pnpm install
-```
-
-2. Copy the environment file:
-
-```bash
+docker compose up -d postgres
 cp .env.example .env.local
-```
-
-3. Start the app:
-
-```bash
+pnpm db:migrate
 pnpm dev
 ```
 
-4. Open:
-
-```txt
-http://localhost:3000
-```
-
-5. Sign in through the workspace gate and try commands like:
-
-- `Remind me to submit my project Friday at 5`
-- `Draft an email to my professor asking for an extension`
-- `Turn this note into tasks`
-- `Plan my day around my 3 PM meeting`
-- `Plan my day around my 3 PM meeting`
-
-## Useful Scripts
+Set these values in `.env.local`:
 
 ```bash
-pnpm dev
-pnpm build
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm demo:check
-pnpm prisma:generate
-pnpm prisma:format
-pnpm db:push
-pnpm db:studio
+DATABASE_URL="postgresql://relay:relay@localhost:5432/relay?schema=public"
+RELAY_ENCRYPTION_KEY="replace-with-output-from-openssl-rand-base64-32"
 ```
 
-## Environment Variables
+Supabase, Neon, or another PostgreSQL provider can be used by replacing `DATABASE_URL`. Run `pnpm db:migrate` against the selected database before starting the app.
 
-`OLLAMA_BASE_URL`
-- optional
-- defaults to `http://127.0.0.1:11434`
+## Google Workspace
 
-`OLLAMA_MODEL`
-- optional
-- defaults to `qwen3:1.7b`
-
-`GOOGLE_CLIENT_ID`
-- required for one-click Google OAuth connect
-
-`GOOGLE_CLIENT_SECRET`
-- required for one-click Google OAuth connect
-
-`GOOGLE_OAUTH_REDIRECT_URI`
-- required for one-click Google OAuth connect
-- should point to your local callback route, for example `http://localhost:3000/api/google/callback`
-
-`GOOGLE_CALENDAR_ID`
-- optional
-- defaults to `primary`
-
-`GOOGLE_CALENDAR_TIMEZONE`
-- optional
-- defaults to `America/Toronto`
-
-`NEXT_PUBLIC_GOOGLE_OAUTH_CONFIGURED`
-- optional UI hint
-- change to `1` after Google OAuth is configured
-
-`NEXT_PUBLIC_GMAIL_CONFIGURED`
-- optional UI hint
-- change to `1` after Google OAuth is configured
-
-`NEXT_PUBLIC_CALENDAR_CONFIGURED`
-- optional UI hint
-- change to `1` after Google OAuth is configured
-
-## Ollama Setup
-
-Relay does not use OpenAI, Anthropic, Gemini, or another paid cloud AI API. Install Ollama, start it, and download the configured model:
-
-```bash
-ollama pull qwen3:1.7b
-ollama serve
-```
-
-The local health endpoint is available at `/api/ai/health`. If Ollama is unavailable, Relay keeps the workspace data intact and shows setup instructions instead of inventing a proposal.
-
-## If You Want One-Click Google Connect
-
-1. Create a Google Cloud OAuth client for a web application
-2. Add this redirect URI in Google Cloud:
+Create a Google OAuth web client with this local redirect URI:
 
 ```txt
 http://localhost:3000/api/google/callback
 ```
 
-3. Put these in `.env.local`:
+Configure:
 
 ```bash
-GOOGLE_CLIENT_ID="your_google_client_id"
-GOOGLE_CLIENT_SECRET="your_google_client_secret"
+GOOGLE_CLIENT_ID="..."
+GOOGLE_CLIENT_SECRET="..."
 GOOGLE_OAUTH_REDIRECT_URI="http://localhost:3000/api/google/callback"
 NEXT_PUBLIC_GOOGLE_OAUTH_CONFIGURED="1"
 ```
 
-4. Restart `pnpm dev`
-5. Open Settings and click `Connect Google Workspace`
+Restart Relay, open Settings, and choose **Connect Google Workspace**. Relay requests only Gmail compose and Calendar event scopes. Tokens are AES-256-GCM encrypted with `RELAY_ENCRYPTION_KEY` and stored per user. External email/calendar actions still require confirmation.
 
-The OAuth tokens are saved only in Relay's ignored local secrets file. Never commit `.env.local`, `data/relay-secrets.json`, or OAuth tokens.
+## Required Production Variables
 
-## Demo Readiness Check
+- `DATABASE_URL`: direct PostgreSQL connection string
+- `RELAY_ENCRYPTION_KEY`: high-entropy key for Google credentials
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`: required only when Google sync is enabled
+- `OLLAMA_BASE_URL`, `OLLAMA_MODEL`: local or privately hosted Ollama endpoint and model
 
-Before presenting, run:
+Production startup fails closed when `DATABASE_URL` or `RELAY_ENCRYPTION_KEY` is missing. `ALLOW_FILE_STORAGE=1` is an explicit single-host demo override and should not be used for normal deployment.
+
+## Commands
 
 ```bash
+pnpm dev
+pnpm build
+pnpm start
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm test:e2e
+pnpm ci
 pnpm demo:check
+pnpm prisma:generate
+pnpm prisma:format
+pnpm db:migrate
+pnpm db:studio
 ```
 
-It verifies dependencies, `.env.local`, writable local storage, the Ollama connection, and the configured model without printing secrets. Google OAuth is optional and produces a warning instead of failing the local demo.
+## Verification
+
+The automated suite covers:
+
+- AI proposal and approval safety
+- strict server mutation validation and same-origin protection
+- encrypted Google token round trips
+- desktop and mobile rendering
+- real registration and session flow
+- isolation between two user accounts
+- workout and meal persistence
+- Axe serious/critical accessibility violations
+- optimized production compilation
+
+`/api/health` reports application and database readiness without exposing secrets. `/api/ai/health` reports the configured Ollama connection.
+
+## Deployment
+
+GitHub Actions runs migrations, type checking, linting, unit tests, and the production build against PostgreSQL. `Dockerfile` produces a non-root standalone Next.js image. `vercel.json` supports Vercel builds; configure the production environment variables and run Prisma migrations as part of release setup.
 
 ## Project Map
 
-- `app/` page routes
-- `components/relay-app.tsx` main UI surface
-- `components/relay-provider.tsx` client state and action bridge
-- `lib/types.ts` shared data contracts
-- `lib/data.ts` seeded starter data
-- `lib/server/relay-store.ts` server-side state mutations and persistence
-- `lib/server/relay-insights.ts` dashboard brief and ranking logic
-- `lib/ai/provider.ts` provider abstraction
-- `lib/ai/ollama-provider.ts` server-only Ollama client and health check
-- `lib/ai/schemas.ts` strict proposal schemas
-- `lib/ai/classify-command.ts` command classification and proposal adaptation
-- `prisma/schema.prisma` database schema scaffold
-
-## Recommended First Demo Flow
-
-1. Open the dashboard
-2. Create a reminder through the assistant bar
-3. Approve it in Confirmations
-4. Open Notes and add messy notes
-5. Extract tasks from the note
-6. Draft an email
-7. Review the generated calendar plan
-8. Confirm the action and verify it persists
+- `app/api/auth/`: registration, login, logout, and session endpoints
+- `app/api/google/`: authenticated Google OAuth lifecycle
+- `components/relay-app.tsx`: responsive application sections
+- `components/dashboard/vision-dashboard.tsx`: dashboard composition
+- `lib/server/auth.ts`: password and session security
+- `lib/server/relay-store.ts`: user-scoped mutations and persistence
+- `lib/server/relay-mutation-schema.ts`: strict API input boundary
+- `lib/server/relay-secrets.ts`: encrypted per-user integration credentials
+- `prisma/schema.prisma`: production data model
+- `prisma/migrations/`: deployable PostgreSQL migrations
+- `test/e2e/`: browser, accessibility, isolation, and persistence coverage
