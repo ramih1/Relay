@@ -7,8 +7,8 @@ type OllamaChatResponse = {
 };
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:11434";
-const DEFAULT_MODEL = "qwen3:4b";
-const DEFAULT_TIMEOUT_MS = 90_000;
+const DEFAULT_MODEL = "qwen3:1.7b";
+const DEFAULT_TIMEOUT_MS = 45_000;
 
 export function getOllamaConfig() {
   return {
@@ -40,7 +40,7 @@ export class OllamaProvider implements AIProvider {
           ],
           options: {
             temperature: options.temperature ?? 0.1,
-            num_ctx: Number(process.env.OLLAMA_CONTEXT_SIZE || 4_096),
+            num_ctx: Number(process.env.OLLAMA_CONTEXT_SIZE || 2_048),
           },
         }),
       });

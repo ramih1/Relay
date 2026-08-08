@@ -10,7 +10,6 @@ test("Relay assigns risk deterministically instead of trusting model output", ()
   assert.equal(proposalRisk("draft_email"), "medium");
   assert.equal(proposalRisk("create_calendar_event"), "medium");
   assert.equal(proposalRisk("create_tasks_from_note"), "medium");
-  assert.equal(proposalRisk("create_call_plan"), "high");
 });
 
 test("task extraction proposals accept a reviewable list of note actions", () => {

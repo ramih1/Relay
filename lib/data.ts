@@ -1,4 +1,4 @@
-import { CalendarEvent, CallRequest, EmailDraft, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
+import { CalendarEvent, EmailDraft, Note, NotificationItem, PendingAction, Reminder, Task } from "@/lib/types";
 
 export const initialTasks: Task[] = [
   {
@@ -28,7 +28,7 @@ export const initialTasks: Task[] = [
 export const initialReminders: Reminder[] = [
   {
     id: "reminder-1",
-    title: "Call mom back",
+    title: "Check in with mom",
     when: "Today, 6:30 PM",
     repeat: "none",
     priority: "medium",
@@ -121,7 +121,7 @@ export const initialNotifications: NotificationItem[] = [
   },
   {
     id: "notif-3",
-    title: "Phone bill reminder",
+    title: "Monthly bill reminder",
     body: "Autopay runs tomorrow morning.",
     category: "later",
     source: "Finance",
@@ -149,23 +149,6 @@ export const initialEmailDrafts: EmailDraft[] = [
   },
 ];
 
-export const initialCalls: CallRequest[] = [
-  {
-    id: "call-1",
-    contactName: "Campus Gym",
-    phoneNumber: "(555) 210-1184",
-    purpose: "Ask whether the basketball court is free tonight after 7.",
-    script:
-      "Hi, I'm Relay, an AI assistant calling on behalf of Rami. I'm checking whether the basketball court is open tonight after 7 PM, and whether there's any closing time to keep in mind.",
-    allowedActions: ["Ask availability", "Ask closing time"],
-    restrictedActions: ["Do not book anything", "Do not share private information"],
-    status: "simulated",
-    transcript:
-      "Relay: Hi, I'm Relay, an AI assistant calling on behalf of Rami...\nGym: The court is free after 7:30 PM tonight.\nRelay: Great, is there a closing time?\nGym: We close at 10 PM.\nRelay: Thanks, I'll pass that along.",
-    summary: "Court is available after 7:30 PM. No booking required. Facility closes at 10 PM.",
-  },
-];
-
 export const initialPendingActions: PendingAction[] = [
   {
     id: "pa-1",
@@ -175,14 +158,5 @@ export const initialPendingActions: PendingAction[] = [
     risk: "medium",
     status: "pending",
     payload: { draftId: "draft-1" },
-  },
-  {
-    id: "pa-2",
-    type: "create_followup_task",
-    title: "Save gym follow-up reminder",
-    description: "Create a reminder to leave by 6:45 PM for basketball.",
-    risk: "medium",
-    status: "pending",
-    payload: { title: "Leave for gym", when: "Today, 6:45 PM" },
   },
 ];

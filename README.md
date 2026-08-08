@@ -10,7 +10,7 @@ The current MVP already supports:
 - email draft proposals
 - optional Gmail draft sync when a Google access token is configured
 - optional Google Calendar event sync when a Google access token is configured
-- simulated call planning, transcript generation, and follow-up actions
+- browser voice input with review before submission
 - persisted profile, preferences, permissions, and workspace session
 
 ## Current Runtime
@@ -36,7 +36,7 @@ git clone https://github.com/98-rami/Relay.git
 cd Relay
 pnpm install
 cp .env.example .env.local
-ollama pull qwen3:4b
+ollama pull qwen3:1.7b
 ```
 
 2. Start Ollama and leave this terminal open:
@@ -58,7 +58,7 @@ Relay runs entirely on your Mac. Ollama provides the local AI model, and local J
 
 No Vercel deployment, hosted database, or paid AI API is needed. Keep the laptop running, `ollama serve` active, and the Relay development server open during the demo.
 
-The default `qwen3:4b` model is chosen for reliable local use on 8 GB Macs. You can select a different installed Ollama model by changing `OLLAMA_MODEL` in `.env.local`.
+The default `qwen3:1.7b` model and 2,048-token context are tuned for responsive use on 8 GB Macs. You can select a different installed Ollama model by changing `OLLAMA_MODEL` in `.env.local`.
 
 ## Quick Start
 
@@ -91,7 +91,7 @@ http://localhost:3000
 - `Remind me to submit my project Friday at 5`
 - `Draft an email to my professor asking for an extension`
 - `Turn this note into tasks`
-- `Call the gym and ask if the basketball court is free tonight`
+- `Plan my day around my 3 PM meeting`
 - `Plan my day around my 3 PM meeting`
 
 ## Useful Scripts
@@ -117,7 +117,7 @@ pnpm db:studio
 
 `OLLAMA_MODEL`
 - optional
-- defaults to `qwen3:4b`
+- defaults to `qwen3:1.7b`
 
 `GOOGLE_CLIENT_ID`
 - required for one-click Google OAuth connect
@@ -154,7 +154,7 @@ pnpm db:studio
 Relay does not use OpenAI, Anthropic, Gemini, or another paid cloud AI API. Install Ollama, start it, and download the configured model:
 
 ```bash
-ollama pull qwen3:4b
+ollama pull qwen3:1.7b
 ollama serve
 ```
 
@@ -216,5 +216,5 @@ It verifies dependencies, `.env.local`, writable local storage, the Ollama conne
 4. Open Notes and add messy notes
 5. Extract tasks from the note
 6. Draft an email
-7. Create a simulated call
-8. Review the generated transcript and follow-up suggestions
+7. Review the generated calendar plan
+8. Confirm the action and verify it persists

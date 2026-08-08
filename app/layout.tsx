@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { RelayProvider } from "@/components/relay-provider";
 import "./globals.css";
+import "./vision.css";
 
 export const metadata: Metadata = {
   title: "Relay",

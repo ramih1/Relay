@@ -5,7 +5,6 @@ export type NavKey =
   | "notes"
   | "reminders"
   | "calendar"
-  | "calls"
   | "confirmations"
   | "notifications"
   | "settings";
@@ -30,7 +29,6 @@ export type UserProfile = {
 export type IntegrationState = {
   calendar: boolean;
   emailDrafts: boolean;
-  callAssistant: boolean;
   shareContextWithAi: boolean;
 };
 
@@ -113,27 +111,12 @@ export type EmailDraft = {
   syncError?: string;
 };
 
-export type CallRequest = {
-  id: string;
-  contactName: string;
-  phoneNumber: string;
-  purpose: string;
-  script: string;
-  allowedActions: string[];
-  restrictedActions: string[];
-  status: "pending" | "approved" | "simulated";
-  transcript?: string;
-  summary?: string;
-};
-
 export type PendingActionType =
   | "create_reminder"
   | "create_task"
   | "create_calendar_event"
   | "draft_email"
-  | "create_tasks_from_note"
-  | "place_call"
-  | "create_followup_task";
+  | "create_tasks_from_note";
 
 export type PendingAction = {
   id: string;
@@ -149,7 +132,7 @@ export type ActionLogEntry = {
   id: string;
   title: string;
   detail: string;
-  category: "assistant" | "approval" | "call" | "productivity" | "system";
+  category: "assistant" | "approval" | "productivity" | "system";
   impact: "info" | "success" | "warning";
   happenedAt: string;
 };
@@ -169,7 +152,6 @@ export type RelayStateSnapshot = {
   calendarEvents: CalendarEvent[];
   notifications: NotificationItem[];
   drafts: EmailDraft[];
-  calls: CallRequest[];
   pendingActions: PendingAction[];
   assistantFeed: string[];
   assistantRequests: AssistantRequestEntry[];
@@ -250,7 +232,6 @@ export type RelayMutationRequest =
   | { type: "delete_reminder"; reminderId: string }
   | { type: "save_draft"; draftId: string; updates: Partial<EmailDraft> }
   | { type: "delete_draft"; draftId: string }
-  | { type: "create_call_followups"; callId: string }
   | { type: "sign_in" }
   | { type: "sign_out" }
   | { type: "update_preferences"; updates: Partial<UserPreferences> }

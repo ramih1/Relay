@@ -36,7 +36,7 @@ test("offline errors explain how to start Ollama with the configured model", asy
   globalThis.fetch = async () => {
     throw new TypeError("fetch failed");
   };
-  process.env.OLLAMA_MODEL = "qwen3:4b";
+  process.env.OLLAMA_MODEL = "qwen3:1.7b";
 
   try {
     const schema = z.object({ ok: z.literal(true) });
@@ -47,7 +47,7 @@ test("offline errors explain how to start Ollama with the configured model", asy
         schema,
         parse: (value) => schema.parse(value),
       }),
-      (error: Error) => error.message.includes("ollama serve") && error.message.includes("ollama pull qwen3:4b"),
+      (error: Error) => error.message.includes("ollama serve") && error.message.includes("ollama pull qwen3:1.7b"),
     );
   } finally {
     globalThis.fetch = originalFetch;

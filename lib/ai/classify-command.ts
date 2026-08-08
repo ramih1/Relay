@@ -5,7 +5,6 @@ import type {
   ActionLogEntry,
   AssistantRequestEntry,
   CalendarEvent,
-  CallRequest,
   EmailDraft,
   IntegrationState,
   NotificationItem,
@@ -31,7 +30,6 @@ export type LocalAssistantPlan = {
   event: Omit<ActionLogEntry, "id" | "happenedAt">;
   pendingActions?: PendingAction[];
   drafts?: EmailDraft[];
-  calls?: CallRequest[];
 };
 
 function baseEvent(title: string, detail: string, category: ActionLogEntry["category"] = "assistant") {
@@ -39,7 +37,8 @@ function baseEvent(title: string, detail: string, category: ActionLogEntry["cate
 }
 
 export function proposalRisk(actionType: ProposedAction["actionType"]): PendingAction["risk"] {
-  return actionType === "create_call_plan" ? "high" : "medium";
+  void actionType;
+  return "medium";
 }
 
 function createPlanFromResult(
@@ -130,30 +129,6 @@ function createPlanFromResult(
         pendingActions: [pendingAction("draft_email", `Email draft: ${payload.subject}`, proposal.description, { draftId })],
       };
     }
-    case "create_call_plan": {
-      if (!integrations.callAssistant) {
-        return { feedMessage: "Call Assistant is disabled in Settings.", request: { input, outcome: "Call Assistant is disabled.", status: "needs_clarification" }, event: baseEvent("Call plan blocked", "Call Assistant is disabled", "system") };
-      }
-      const payload = proposal.payload;
-      const callId = crypto.randomUUID();
-      const call: CallRequest = {
-        id: callId,
-        contactName: payload.contactName,
-        phoneNumber: payload.phoneNumber ?? "",
-        purpose: payload.purpose,
-        script: payload.script,
-        allowedActions: payload.allowedActions,
-        restrictedActions: payload.restrictedActions,
-        status: "pending",
-      };
-      return {
-        feedMessage: proposal.reasoningSummary ?? "Prepared a transparent simulated call plan. It is waiting for approval.",
-        request: { input, outcome: "Prepared a call plan with approval requirements.", status: "proposal_created" },
-        event: { ...baseEvent("Call plan prepared", `${payload.contactName} • ${payload.purpose}`, "call"), impact: "warning" },
-        calls: [call],
-        pendingActions: [pendingAction("place_call", `Call ${payload.contactName}`, proposal.description, { callId })],
-      };
-    }
     case "create_calendar_event": {
       if (!integrations.calendar) {
         return { feedMessage: "Calendar planning is disabled in Settings.", request: { input, outcome: "Calendar planning is disabled.", status: "needs_clarification" }, event: baseEvent("Calendar proposal blocked", "Calendar planning is disabled", "system") };
@@ -189,5 +164,5 @@ export async function classifyCommand(input: {
     parse: (value) => commandResultSchema.parse(value),
   });
 
-  return createPlanFromResult(input.userMessage, result, input.userContext?.profile ?? { name: "Rami", email: "", role: "Student" }, input.integrations ?? { calendar: true, emailDrafts: true, callAssistant: true, shareContextWithAi: true });
+  return createPlanFromResult(input.userMessage, result, input.userContext?.profile ?? { name: "Rami", email: "", role: "Student" }, input.integrations ?? { calendar: true, emailDrafts: true, shareContextWithAi: true });
 }

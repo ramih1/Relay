@@ -9,18 +9,14 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
-  ChevronRight,
   ClipboardList,
   Clock3,
   Palette,
   Home,
-  Mail,
   MoonStar,
-  PhoneCall,
   Search,
   Send,
   Settings,
-  Sparkles,
   StickyNote,
   SunMedium,
   Trash2,
@@ -39,6 +35,8 @@ import type {
   ThemeName,
 } from "@/lib/types";
 import { useRelay } from "@/components/relay-provider";
+import { VoiceInputButton } from "@/components/assistant/voice-input-button";
+import { VisionDashboard } from "@/components/dashboard/vision-dashboard";
 
 const navItems: { key: NavKey; label: string; href: string; icon: ComponentType<{ className?: string }> }[] = [
   { key: "dashboard", label: "Dashboard", href: "/", icon: Home },
@@ -47,7 +45,6 @@ const navItems: { key: NavKey; label: string; href: string; icon: ComponentType<
   { key: "notes", label: "Notes", href: "/notes", icon: StickyNote },
   { key: "reminders", label: "Reminders", href: "/reminders", icon: Clock3 },
   { key: "calendar", label: "Calendar", href: "/calendar", icon: CalendarDays },
-  { key: "calls", label: "Calls", href: "/calls", icon: PhoneCall },
   { key: "confirmations", label: "Confirmations", href: "/confirmations", icon: CheckCheck },
   { key: "notifications", label: "Notifications", href: "/notifications", icon: Bell },
   { key: "settings", label: "Settings", href: "/settings", icon: Settings },
@@ -57,7 +54,6 @@ const commandSamples = [
   "Remind me to submit my project Friday at 5",
   "Draft an email to my professor asking for an extension",
   "Turn this note into tasks",
-  "Call the gym and ask if the basketball court is free tonight",
   "Plan my day around my 3 PM meeting",
   "Summarize notifications",
 ];
@@ -67,32 +63,17 @@ const mobileNavItems = navItems.slice(0, 5);
 const confirmationTabs = ["pending", "approved", "cancelled"] as const;
 type ConfirmationTab = (typeof confirmationTabs)[number];
 const themeOptions = [
-  { key: "carbon", label: "Carbon", accent: "#56d3d0" },
+  { key: "carbon", label: "Carbon", accent: "#7654ff" },
   { key: "light", label: "Light", accent: "#0f766e" },
-  { key: "dawn", label: "Dawn", accent: "#b45309" },
+  { key: "dawn", label: "Dawn", accent: "#f59e0b" },
   { key: "ocean", label: "Ocean", accent: "#38bdf8" },
 ] as const satisfies ReadonlyArray<{ key: ThemeName; label: string; accent: string }>;
-const activityToneMap = {
-  pending: "warning",
-  approved: "success",
-  simulated: "success",
-  draft: "neutral",
-  active: "neutral",
-} as const;
 const taskFilterOptions = ["all", "today", "upcoming", "overdue", "completed"] as const;
 type TaskFilter = (typeof taskFilterOptions)[number];
 const reminderFilterOptions = ["all", "active", "snoozed", "done"] as const;
 type ReminderFilter = (typeof reminderFilterOptions)[number];
 const assistantToneOptions = ["calm", "friendly", "formal"] as const;
 const digestStyleOptions = ["balanced", "brief"] as const;
-
-type QuickAction = {
-  label: string;
-  detail: string;
-  href: string;
-  disabled?: boolean;
-  onClick: () => void;
-};
 
 export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
   const {
@@ -102,7 +83,6 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     calendarEvents,
     notifications,
     drafts,
-    calls,
     pendingActions,
     assistantRequests,
     actionLog,
@@ -138,7 +118,6 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     deleteDraft,
     summarizeNote,
     suggestNoteTags,
-    createCallFollowups,
     updatePreferences,
     updateProfile,
     updateIntegrations,
@@ -191,7 +170,6 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
   const overdueCount = tasks.filter((task) => task.status === "overdue").length;
   const activeReminderCount = reminders.filter((reminder) => reminder.status === "active").length;
   const pendingDraftCount = drafts.filter((draft) => draft.status === "draft").length;
-  const pendingCallCount = calls.filter((call) => call.status === "pending").length;
   const notesPreview = notes.find((note) => note.id === selectedNoteId) ?? notes[0];
   const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) ?? drafts[0];
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
@@ -235,48 +213,6 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     () => ["all", ...new Set(notes.flatMap((note) => note.tags))],
     [notes],
   );
-  const recentActivity = useMemo(
-    () =>
-      [
-        ...pendingActions.slice(0, 3).map((action) => ({
-          id: action.id,
-          label: action.title,
-          detail: action.description,
-          status: action.status,
-          category:
-            action.type === "place_call"
-              ? "Call plan"
-              : action.type === "draft_email"
-                ? "Email draft"
-                : action.type === "create_tasks_from_note"
-                  ? "Task extraction"
-                  : "Reminder",
-        })),
-        ...calls.slice(0, 1).map((call) => ({
-          id: call.id,
-          label: call.contactName,
-          detail: call.summary ?? call.purpose,
-          status: call.status,
-          category: "Call result",
-        })),
-        ...drafts.slice(0, 1).map((draft) => ({
-          id: draft.id,
-          label: draft.subject,
-          detail: draft.recipient,
-          status: draft.status,
-          category: "Draft status",
-        })),
-        ...reminders.slice(0, 1).map((reminder) => ({
-          id: reminder.id,
-          label: reminder.title,
-          detail: reminder.when,
-          status: reminder.status,
-          category: "Reminder pulse",
-        })),
-      ].slice(0, 6),
-    [calls, drafts, pendingActions, reminders],
-  );
-
   const fallbackBrief = useMemo(() => {
     const lines: string[] = [];
 
@@ -289,9 +225,6 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     if (pendingDraftCount > 0) {
       lines.push(`${pendingDraftCount} email draft${pendingDraftCount === 1 ? "" : "s"} still need review`);
     }
-    if (pendingCallCount > 0) {
-      lines.push(`${pendingCallCount} call plan${pendingCallCount === 1 ? "" : "s"} are ready to confirm`);
-    }
     if (activeReminderCount > 0) {
       lines.push(`${activeReminderCount} active reminder${activeReminderCount === 1 ? "" : "s"} are scheduled`);
     }
@@ -302,7 +235,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     const first = lines[0];
     const rest = lines.slice(1);
     return rest.length > 0 ? `${first}, and ${rest.join(", ")}.` : `${first}.`;
-  }, [activeReminderCount, overdueCount, pendingCount, pendingDraftCount, pendingCallCount]);
+  }, [activeReminderCount, overdueCount, pendingCount, pendingDraftCount]);
 
   const taskGroups = useMemo(
     () => ({
@@ -376,7 +309,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
     if (highPriorityTasks.length > 0) {
       return "You already know the high-priority tasks. A short focus block would move today forward.";
     }
-    return "You have room to plan. Try drafting a reminder, message, or call plan from the assistant bar.";
+    return "You have room to plan. Try drafting a reminder, message, or task from the assistant bar.";
   }, [highPriorityTasks.length, overdueCount, pendingCount]);
 
   function handleSubmitCommand() {
@@ -461,35 +394,6 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
   const canCreateCalendarEvent =
     calendarForm.title.trim().length > 0 && calendarForm.start.trim().length > 0 && calendarForm.end.trim().length > 0;
 
-  const quickActions: QuickAction[] = [
-    {
-      label: "New task",
-      detail: "Add something manually",
-      onClick: () => setTaskForm((current) => ({ ...current, title: "Follow up on project outline" })),
-      href: "/tasks",
-    },
-    {
-      label: "Draft email",
-      detail: integrations.emailDrafts ? "Queue a message for approval" : "Enable email drafting in Settings first",
-      disabled: !integrations.emailDrafts,
-      onClick: () => {
-        setCommand("Draft an email to my professor asking for an extension");
-        void submitCommand("Draft an email to my professor asking for an extension");
-      },
-      href: "/assistant",
-    },
-    {
-      label: "Plan a call",
-      detail: integrations.callAssistant ? "Prepare a transparent call script" : "Enable call assistant access in Settings first",
-      disabled: !integrations.callAssistant,
-      onClick: () => {
-        setCommand("Call the gym and ask if the basketball court is free tonight");
-        void submitCommand("Call the gym and ask if the basketball court is free tonight");
-      },
-      href: "/calls",
-    },
-  ];
-
   useEffect(() => {
     setTheme(preferences.theme);
   }, [preferences.theme]);
@@ -560,18 +464,15 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
   }
 
   return (
-    <main className="min-h-screen bg-bg pb-24 text-text lg:pb-0">
-      <div className="relative overflow-hidden">
+    <main className="vision-app min-h-screen bg-bg pb-24 text-text lg:pb-0">
+      <div className="vision-app-background relative overflow-hidden">
         <div className="ambient-aurora" aria-hidden="true" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(86,211,208,0.08),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(226,190,125,0.07),_transparent_16%),radial-gradient(circle_at_center,_rgba(255,255,255,0.02),_transparent_28%)]" />
-        <div className="mx-auto max-w-[1560px] px-4 py-4 sm:px-6 lg:px-8">
+        <div className="vision-app-frame mx-auto max-w-[1800px] px-4 py-4 sm:px-6">
           <div className="relay-shell flex min-h-[calc(100vh-2rem)] flex-col overflow-hidden lg:flex-row">
-            <aside className="relay-sidebar flex w-full shrink-0 flex-col border-b border-white/6 px-5 py-6 lg:w-[224px] lg:border-b-0 lg:border-r lg:px-4">
-              <div className="flex items-start justify-between">
+            <aside className="relay-sidebar flex w-full shrink-0 flex-col border-b border-white/6 px-5 py-6 lg:w-[276px] lg:border-b-0 lg:px-5">
+              <div className="vision-sidebar-brand">
                 <RelayBrand />
-                <button type="button" className="icon-chip mt-2 hidden lg:inline-flex">
-                  <ChevronRight className="h-4 w-4 rotate-180" />
-                </button>
               </div>
 
               <nav className="mt-8 space-y-2">
@@ -621,281 +522,33 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
               </div>
             </aside>
 
-            <section className="relative flex flex-1 flex-col px-5 py-5 lg:px-6">
+            <section className="vision-main-panel relative flex min-w-0 flex-1 flex-col px-5 py-5 lg:px-7">
               <ThemeRail theme={theme} onThemeChange={handleThemeChange} />
               {lastError ? (
                 <div className="mb-4 rounded-[1rem] border border-[color:color-mix(in_srgb,var(--danger)_32%,transparent_68%)] bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--title)]">
                   {lastError}
                 </div>
               ) : null}
-              <TopCommandBar command={command} setCommand={setCommand} submitCommand={handleSubmitCommand} />
+              <TopCommandBar section={section} command={command} setCommand={setCommand} submitCommand={handleSubmitCommand} />
 
               {section === "dashboard" ? (
-                <>
-                  <div className="dashboard-metrics">
-                    <MetricCard label="Today" value={String(sortedCalendarEvents.length)} detail="Scheduled moments" />
-                    <MetricCard label="Open tasks" value={String(tasks.filter((task) => task.status !== "done").length)} detail={`${highPriorityTasks.length} high priority`} />
-                    <MetricCard label="Approvals" value={String(pendingCount)} detail="Waiting for you" />
-                    <MetricCard label="Relay AI" value="Online" detail={runtime.ollamaModel} />
-                  </div>
-                  <div className="mt-5 grid gap-4 xl:grid-cols-[1.7fr_0.95fr]">
-                    <section className="hero-panel">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="eyebrow">Today Brief</p>
-                          <h1 className="title-hero mt-5 font-display text-[3rem] leading-[1.02] sm:text-[4rem]">
-                            Good morning, {profile.name}.
-                          </h1>
-                          <p className="copy-strong mt-4 max-w-[620px] text-xl leading-9">{insights?.dailyBrief ?? fallbackBrief}</p>
-                        </div>
-                        <button
-                          type="button"
-                          className="soft-outline hidden lg:inline-flex"
-                          onClick={() => void refreshInsights()}
-                          disabled={isRefreshingInsights}
-                        >
-                          {isRefreshingInsights ? "Refreshing brief..." : "Refresh brief"}
-                        </button>
-                      </div>
-
-                      <div className="orbital-art" aria-hidden="true">
-                        <span />
-                        <span />
-                        <span />
-                        <span />
-                        <span />
-                      </div>
-
-                      <div className="mt-8 grid gap-3 md:grid-cols-4">
-                        <StatChip icon={Bell} value={activeReminderCount} label="Reminders" tone="teal" />
-                        <StatChip icon={Clock3} value={overdueCount} label="Overdue Task" tone="rose" />
-                        <StatChip icon={Mail} value={pendingDraftCount} label="Email Draft" tone="gold" />
-                        <StatChip icon={PhoneCall} value={pendingCallCount} label="Call Request" tone="teal" />
-                      </div>
-                      <div className="focus-block mt-5 px-4 py-4">
-                        <p className="accent-copy text-sm uppercase tracking-[0.2em]">Focus suggestion</p>
-                        <p className="copy-strong mt-2 text-sm leading-7">{insights?.focusMessage ?? fallbackFocus}</p>
-                      </div>
-                    </section>
-
-                    <section className="feature-panel">
-                      <div className="mb-6 flex items-center justify-between">
-                        <p className="eyebrow">Schedule</p>
-                        <Link href="/calendar" className="panel-link">
-                          View Calendar
-                        </Link>
-                      </div>
-
-                      <div className="space-y-6">
-                        {sortedCalendarEvents.map((item, index) => (
-                          <div key={`${item.start}-${item.title}`} className="flex gap-4">
-                            <div className="flex flex-col items-center">
-                              <span className="h-3 w-3 rounded-full border border-white/90 bg-transparent" />
-                              {index < sortedCalendarEvents.length - 1 ? <span className="mt-2 h-full w-px bg-white/10" /> : null}
-                            </div>
-                            <div className="copy-strong min-w-[78px] text-sm">{item.start}</div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3">
-                                <span
-                                  className={clsx(
-                                    "h-2.5 w-2.5 rounded-full",
-                                    item.tone === "teal" ? "bg-[#56d3d0]" : item.tone === "gold" ? "bg-[#ddb26f]" : "bg-[#f2808e]",
-                                  )}
-                                />
-                                <p className="title-main text-xl">{item.title}</p>
-                              </div>
-                              <p className="mt-1 text-sm text-muted">{item.detail}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 xl:grid-cols-3">
-                    <DashboardPanel title="Priority Tasks" actionLabel="View all" href="/tasks">
-                        <div className="space-y-4">
-                          {tasks.slice(0, 4).map((task) => (
-                            <TaskRow
-                              key={task.id}
-                              task={task}
-                              active={selectedTask?.id === task.id}
-                              onSelect={() => setSelectedTaskId(task.id)}
-                              onToggle={() => toggleTask(task.id)}
-                              onDelete={() => deleteTask(task.id)}
-                            />
-                          ))}
-                        </div>
-                    </DashboardPanel>
-
-                    <DashboardPanel title="Confirmations Queue" actionLabel={`View all (${pendingApprovals.length})`} href="/confirmations">
-                      <div className="space-y-3">
-                        {pendingApprovals.slice(0, 3).map((action) => (
-                          <ConfirmationRow
-                            key={action.id}
-                            action={action}
-                            onApprove={() => approveAction(action.id)}
-                            onCancel={() => cancelAction(action.id)}
-                          />
-                        ))}
-                      </div>
-                    </DashboardPanel>
-
-                    <DashboardPanel title="Notifications Intelligence" actionLabel="View all" href="/notifications">
-                      <div className="space-y-4">
-                        {(insights?.rankedNotifications ?? notifications).map((notification) => (
-                          <NotificationRow
-                            key={notification.id}
-                            notification={notification}
-                            onMarkRead={() => markNotificationRead(notification.id)}
-                            onRecategory={(category) => updateNotificationCategory(notification.id, category)}
-                          />
-                        ))}
-                      </div>
-                    </DashboardPanel>
-                  </div>
-
-                  <div className="dashboard-secondary mt-4 grid gap-4 xl:grid-cols-3">
-                    <DashboardPanel title="Notes Preview" actionLabel="Open notes" href="/notes">
-                      {notesPreview ? <NotePreviewCard note={notesPreview} /> : null}
-                    </DashboardPanel>
-
-                    <DashboardPanel title="Call Assistant" actionLabel="View calls" href="/calls">
-                      <div className="app-card p-5">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-center gap-4">
-                            <div className="accent-orb flex h-16 w-16 items-center justify-center rounded-full">
-                              <PhoneCall className="h-7 w-7" />
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted">Pending Call Plan</p>
-                              <p className="title-main mt-1 text-[2rem] leading-none">{calls[0]?.contactName ?? "Campus Gym"}</p>
-                              <p className="copy-strong mt-2 text-sm">{calls[0]?.purpose ?? "Ask if basketball court is free tonight"}</p>
-                            </div>
-                          </div>
-                          <StatusPill value="high" tone="danger" />
-                        </div>
-
-                        <div className="mt-5 flex flex-wrap gap-3">
-                          <Link href="/calls" className="soft-outline">
-                            Review Plan
-                          </Link>
-                          <button
-                            type="button"
-                            className="relay-button"
-                            onClick={() => {
-                              const pendingCall = pendingApprovals.find((action) => action.type === "place_call");
-                              if (pendingCall) {
-                                approveAction(pendingCall.id);
-                              }
-                            }}
-                          >
-                            Approve Call
-                          </button>
-                        </div>
-                      </div>
-                    </DashboardPanel>
-
-                    <DashboardPanel title="AI Suggestions" actionLabel="Open assistant" href="/assistant">
-                      <div className="space-y-3">
-                        {(insights?.suggestionCards ?? [
-                          "You have a gap at 1:00 PM. Good time to study.",
-                          "Consider starting your project earlier.",
-                          "3 tasks can be scheduled around your classes.",
-                        ]).map((suggestion) => (
-                          <button
-                            key={suggestion}
-                            type="button"
-                            className="app-card flex w-full items-center justify-between px-4 py-4 text-left transition hover:border-[color:color-mix(in_srgb,var(--warn)_36%,transparent_64%)]"
-                          >
-                            <span className="title-soft flex items-center gap-3">
-                              <Sparkles className="accent-copy h-4 w-4" />
-                              <span>{suggestion}</span>
-                            </span>
-                            <ChevronRight className="h-4 w-4 text-muted" />
-                          </button>
-                        ))}
-                      </div>
-                    </DashboardPanel>
-                  </div>
-
-                  <div className="dashboard-secondary mt-4">
-                    <DashboardPanel title="Quick Actions">
-                      <div className="grid gap-3 md:grid-cols-3">
-                        {quickActions.map((action) => (
-                          <Link
-                            key={action.label}
-                            href={action.href}
-                            onClick={(event) => {
-                              if (action.disabled) {
-                                event.preventDefault();
-                                return;
-                              }
-
-                              action.onClick();
-                            }}
-                            aria-disabled={action.disabled}
-                            className={clsx(
-                              "app-card px-4 py-4 transition",
-                              action.disabled
-                                ? "cursor-not-allowed opacity-55"
-                                : "hover:border-[color:color-mix(in_srgb,var(--accent)_30%,transparent_70%)] hover:bg-[color:color-mix(in_srgb,var(--accent)_6%,transparent_94%)]",
-                            )}
-                          >
-                            <p className="title-main text-lg">{action.label}</p>
-                            <p className="copy-soft mt-2 text-sm leading-6">{action.detail}</p>
-                          </Link>
-                        ))}
-                      </div>
-                    </DashboardPanel>
-                  </div>
-
-                  <div className="dashboard-secondary mt-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-                    <DashboardPanel title="Recent Activity Lane" actionLabel="Open assistant" href="/assistant">
-                      {recentActivity.length > 0 ? (
-                        <div className="space-y-3">
-                          {recentActivity.map((item) => (
-                            <ActivityRow
-                              key={`${item.category}-${item.id}`}
-                              label={item.label}
-                              detail={item.detail}
-                              category={item.category}
-                              tone={activityToneMap[item.status as keyof typeof activityToneMap] ?? "neutral"}
-                              status={item.status}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <EmptyState title="No recent activity yet" description="As you approve reminders, draft emails, and simulate calls, Relay will build a living activity trail here." />
-                      )}
-                    </DashboardPanel>
-
-                    <div className="grid gap-4 lg:grid-cols-3 xl:grid-cols-1">
-                      <MetricCard label="Open approvals" value={String(pendingCount)} detail="Transparent action queue" />
-                      <MetricCard label="Priority tasks" value={String(highPriorityTasks.length)} detail="Focused for today" />
-                      <MetricCard
-                        label="Simulated calls"
-                        value={String(calls.filter((call) => call.status === "simulated").length)}
-                        detail="Ready for follow-up"
-                      />
-                      <MetricCard label="Audit events" value={String(actionLog.length)} detail="Server-recorded trail" />
-                    </div>
-                  </div>
-
-                  <div className="dashboard-secondary mt-4 feature-panel">
-                    <div className="mb-4 flex items-center justify-between">
-                      <p className="eyebrow">Assistant Requests</p>
-                      <Link href="/assistant" className="panel-link">
-                        Open Assistant
-                      </Link>
-                    </div>
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      {assistantRequests.slice(0, 4).map((request) => (
-                        <AssistantRequestCard key={request.id} request={request} compact />
-                      ))}
-                    </div>
-                  </div>
-                </>
+                <VisionDashboard
+                  profileName={profile.name}
+                  dailyBrief={insights?.dailyBrief ?? fallbackBrief}
+                  focusMessage={insights?.focusMessage ?? fallbackFocus}
+                  ollamaModel={runtime.ollamaModel}
+                  tasks={tasks}
+                  reminders={reminders}
+                  calendarEvents={sortedCalendarEvents}
+                  notifications={insights?.rankedNotifications ?? notifications}
+                  pendingActions={pendingApprovals}
+                  pendingDraftCount={pendingDraftCount}
+                  isRefreshing={isRefreshingInsights}
+                  onRefresh={() => void refreshInsights()}
+                  onToggleTask={(taskId) => void toggleTask(taskId)}
+                  onApproveAction={(actionId) => void approveAction(actionId)}
+                  onMarkNotificationRead={(notificationId) => void markNotificationRead(notificationId)}
+                />
               ) : null}
 
               {section === "tasks" ? (
@@ -1112,7 +765,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                         <ul className="copy-strong space-y-3 text-sm leading-7">
                           <li>• Low risk: summaries, tags, and note insights.</li>
                           <li>• Medium risk: reminders, drafts, and extracted tasks.</li>
-                          <li>• High risk: calls and future external integrations.</li>
+                          <li>• High risk: future external integrations.</li>
                         </ul>
                       </DashboardPanel>
                       <DashboardPanel title="Execution Trail">
@@ -1142,7 +795,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                           ))}
                         </div>
                       ) : (
-                        <EmptyState title="Assistant is quiet" description="Type a natural language request above to create reminders, drafts, task proposals, or call plans." />
+                        <EmptyState title="Assistant is quiet" description="Type a natural language request above to create reminders, drafts, task proposals, or calendar plans." />
                       )}
                     </DashboardPanel>
                     <DashboardPanel title="Command Patterns">
@@ -1156,7 +809,6 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                       <div className="assistant-mini-grid mt-4">
                         <MiniMetric label="Pending approvals" value={String(pendingCount)} />
                         <MiniMetric label="Drafts in review" value={String(pendingDraftCount)} />
-                        <MiniMetric label="Call plans" value={String(pendingCallCount)} />
                       </div>
                     </DashboardPanel>
                   </div>
@@ -1290,7 +942,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                 <SectionPage eyebrow="Calendar" title="Plan the day with real events." description="The MVP now keeps calendar events in the server-backed workspace so your schedule behaves like the rest of Relay.">
                   <div className="mb-4 grid gap-4 md:grid-cols-3">
                     <MetricCard label="Events" value={String(calendarEvents.length)} detail="Live schedule items" />
-                    <MetricCard label="Pending calls" value={String(pendingCallCount)} detail="May affect your plan" />
+                    <MetricCard label="Active reminders" value={String(activeReminderCount)} detail="May affect your plan" />
                     <MetricCard label="Open approvals" value={String(pendingCount)} detail="Calendar stays transparent" />
                   </div>
                   <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
@@ -1363,105 +1015,6 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                 </SectionPage>
               ) : null}
 
-              {section === "calls" ? (
-                <SectionPage eyebrow="Calls" title="A transparent calling assistant." description="Call plans clearly state who Relay is contacting, what it may ask, and what it must not do.">
-                  <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-                    <DashboardPanel title="Call Queue">
-                      {calls.length > 0 ? (
-                        <div className="space-y-4">
-                          {calls.map((call) => (
-                            <div key={call.id} className="app-card p-4">
-                              <div className="flex items-center justify-between gap-3">
-                                <div>
-                                  <p className="title-main text-xl">{call.contactName}</p>
-                                  <p className="mt-1 text-sm text-muted">{call.purpose}</p>
-                                  <p className="copy-soft mt-2 text-sm">{call.phoneNumber}</p>
-                                </div>
-                                <StatusPill value={call.status} tone={call.status === "pending" ? "warning" : "success"} />
-                              </div>
-                              <p className="copy-strong mt-4 text-sm leading-7">{call.script}</p>
-                              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                                <div className="soft-card p-4">
-                                  <p className="accent-copy text-xs uppercase tracking-[0.18em]">Allowed</p>
-                                  <ul className="copy-strong mt-3 space-y-2 text-sm leading-6">
-                                    {call.allowedActions.map((item) => (
-                                      <li key={item}>• {item}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                                <div className="soft-card p-4">
-                                  <p className="accent-copy text-xs uppercase tracking-[0.18em]">Restricted</p>
-                                  <ul className="copy-strong mt-3 space-y-2 text-sm leading-6">
-                                    {call.restrictedActions.map((item) => (
-                                      <li key={item}>• {item}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              </div>
-                              {call.status === "pending" ? (
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    className="relay-button"
-                                    onClick={() => {
-                                      const pendingCall = pendingApprovals.find((action) => action.type === "place_call" && String(action.payload.callId) === call.id);
-                                      if (pendingCall) {
-                                        approveAction(pendingCall.id);
-                                      }
-                                    }}
-                                  >
-                                    Approve simulated call
-                                  </button>
-                                </div>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <EmptyState title="No call plans yet" description="Ask Relay to call a business or office, and it will prepare a transparent script here." />
-                      )}
-                    </DashboardPanel>
-                    <DashboardPanel title="Latest Summary">
-                      <p className="copy-strong text-sm leading-8">{calls[0]?.summary ?? "Approve a call plan to generate a transcript and summary."}</p>
-                      {calls[0]?.transcript ? (
-                        <pre className="note-surface copy-soft mt-4 whitespace-pre-wrap p-4 text-xs leading-7">
-                          {calls[0].transcript}
-                        </pre>
-                      ) : null}
-                      {calls[0]?.status === "simulated" ? (
-                        <div className="mt-4 space-y-4">
-                          <div className="grid gap-3 md:grid-cols-3">
-                            <div className="soft-card p-4">
-                              <p className="title-main text-base">Reminder</p>
-                              <p className="copy-soft mt-2 text-sm leading-6">Leave by 6:45 PM so the court window still works.</p>
-                            </div>
-                            <div className="soft-card p-4">
-                              <p className="title-main text-base">Task</p>
-                              <p className="copy-soft mt-2 text-sm leading-6">Text friends and confirm who is joining tonight.</p>
-                            </div>
-                            <div className="soft-card p-4">
-                              <p className="title-main text-base">Calendar</p>
-                              <p className="copy-soft mt-2 text-sm leading-6">Block out the basketball run directly on the schedule.</p>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <button type="button" className="small-action primary" onClick={() => createCallFollowups(calls[0].id)}>
-                              Create follow-up approvals
-                            </button>
-                            <button type="button" className="small-action" onClick={() => submitCommand("Remind me to leave for the gym at 6:45 PM")}>
-                              Quick reminder
-                            </button>
-                            <button type="button" className="small-action" onClick={() => submitCommand("Create task to text friends about basketball tonight")}>
-                              Draft task
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                    </DashboardPanel>
-                  </div>
-                </SectionPage>
-              ) : null}
-
               {section === "notifications" ? (
                 <SectionPage eyebrow="Notifications" title="See what matters now." description="Relay groups mock notifications by urgency so the dashboard stays calm instead of noisy.">
                   <div className="mb-4 grid gap-4 md:grid-cols-4">
@@ -1516,7 +1069,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                           className="field-input"
                         />
                         <p className="copy-soft text-sm leading-7">
-                          Relay uses this profile to personalize call scripts, email sign-offs, and the daily brief without changing the approval-first workflow.
+                          Relay uses this profile to personalize email sign-offs and the daily brief without changing the approval-first workflow.
                         </p>
                         <button type="button" className="relay-button" onClick={handleSaveProfile}>
                           Save Profile
@@ -1536,12 +1089,6 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                           description="Allows the assistant to prepare email drafts for confirmation."
                           enabled={integrations.emailDrafts}
                           onToggle={() => void updateIntegrations({ emailDrafts: !integrations.emailDrafts })}
-                        />
-                        <IntegrationToggle
-                          label="Call assistant"
-                          description="Allows Relay to prepare transparent simulated call plans on your behalf."
-                          enabled={integrations.callAssistant}
-                          onToggle={() => void updateIntegrations({ callAssistant: !integrations.callAssistant })}
                         />
                         <IntegrationToggle
                           label="Share context with AI"
@@ -1607,7 +1154,7 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                           </div>
                         </div>
                         <p className="copy-strong text-sm leading-7">
-                          High-risk actions still require explicit approval, and simulated calls continue to identify Relay clearly on your behalf.
+                          External actions still require explicit approval, and Relay keeps a clear review trail.
                         </p>
                       </div>
                     </DashboardPanel>
@@ -1684,12 +1231,11 @@ export function RelayApp({ section = "dashboard" }: { section?: NavKey }) {
                     <DashboardPanel title="Backend State">
                       <div className="space-y-4">
                         <p className="copy-strong text-sm leading-7">
-                          Relay now keeps its workspace state through the server layer instead of relying only on browser-local memory. Tasks, reminders, drafts, calls, approvals, and appearance preferences persist in the project runtime itself.
+                          Relay keeps its workspace state through the server layer instead of relying only on browser-local memory. Tasks, reminders, drafts, approvals, and appearance preferences persist in the project runtime itself.
                         </p>
                         <div className="grid gap-3 md:grid-cols-3">
                           <TaskInsightCard label="Tasks" value={String(tasks.length)} detail="Server-backed records" />
                           <TaskInsightCard label="Approvals" value={String(pendingActions.length)} detail="Tracked through API" />
-                          <TaskInsightCard label="Calls" value={String(calls.length)} detail="Stored with summaries" />
                         </div>
                       </div>
                     </DashboardPanel>
@@ -1833,7 +1379,7 @@ function AuthGate({
             Sign in to your Relay command center.
           </h1>
           <p className="copy-strong mt-4 max-w-[720px] text-lg leading-8">
-            Your approvals, notes, tasks, reminders, drafts, and simulated calls stay organized behind a real workspace entry flow.
+            Your approvals, notes, tasks, reminders, drafts, and calendar stay organized behind a focused workspace entry flow.
           </p>
           {lastError ? (
             <div className="mt-5 rounded-[1rem] border border-[color:color-mix(in_srgb,var(--danger)_32%,transparent_68%)] bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--title)]">
@@ -1845,7 +1391,7 @@ function AuthGate({
               <p className="accent-copy text-sm uppercase tracking-[0.18em]">Workspace Promise</p>
               <ul className="copy-strong mt-4 space-y-3 text-sm leading-7">
                 <li>• Important actions stay approval-first.</li>
-                <li>• Calls stay transparent about what Relay can and cannot do.</li>
+                <li>• External actions remain visible and reviewable.</li>
                 <li>• Settings, permissions, and assistant behavior persist with your workspace.</li>
               </ul>
             </div>
@@ -1880,60 +1426,51 @@ function RelayBrand() {
 }
 
 function TopCommandBar({
+  section,
   command,
   setCommand,
   submitCommand,
 }: {
+  section: NavKey;
   command: string;
   setCommand: (value: string) => void;
   submitCommand: () => void;
 }) {
-  return (
-    <div className="flex items-start gap-4 lg:pr-[15.5rem]">
-      <div className="command-bar flex-1">
-        <button type="button" className="icon-chip hidden sm:inline-flex">
-          <Sparkles className="h-4 w-4 text-[var(--warn)]" />
-        </button>
+  const pageLabel = navItems.find((item) => item.key === section)?.label ?? "Dashboard";
 
-        <div className="min-w-0 flex-1">
-          <p className="title-soft text-base">What would you like Relay to do?</p>
-          <div className="command-samples mt-2 flex flex-wrap gap-2">
-            {commandSamples.slice(0, 2).map((sample) => (
-              <button key={sample} type="button" onClick={() => setCommand(sample)} className="rounded-full border border-[color:color-mix(in_srgb,var(--surface-outline)_55%,transparent_45%)] px-3 py-1.5 text-sm text-muted transition hover:border-[color:color-mix(in_srgb,var(--warn)_40%,transparent_60%)] hover:text-[var(--title)]">
-                {sample}
-              </button>
-            ))}
-          </div>
+  return (
+    <header className="vision-page-header">
+      <div className="vision-page-meta">
+        <p><span>Pages</span><b>/</b>{pageLabel}</p>
+        <h1>{pageLabel}</h1>
+      </div>
+
+      <div className="vision-header-actions">
+        <div className="vision-command-field">
+          <Search aria-hidden="true" />
           <input
             value={command}
             onChange={(event) => setCommand(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                submitCommand();
-              }
+              if (event.key === "Enter") submitCommand();
             }}
-            placeholder="Try: Remind me to study tomorrow at 10am"
-            className="mt-3 w-full bg-transparent text-sm text-[var(--title)] outline-none placeholder:text-muted"
+            placeholder="Ask Relay..."
+            aria-label="Ask Relay"
           />
+          <VoiceInputButton onTranscript={setCommand} />
+          <button type="button" onClick={submitCommand} aria-label="Send command">
+            <Send aria-hidden="true" />
+          </button>
         </div>
-
-        <button type="button" className="icon-chip" onClick={submitCommand}>
-          <Send className="h-4 w-4 text-[var(--warn)]" />
-        </button>
+        <Link href="/settings" className="vision-header-link">
+          <Settings aria-hidden="true" />
+          <span>Settings</span>
+        </Link>
+        <Link href="/notifications" className="vision-header-icon" aria-label="Notifications">
+          <Bell aria-hidden="true" />
+        </Link>
       </div>
-
-      <div className="hidden items-center gap-3 lg:flex">
-        <button type="button" className="icon-chip">
-          <Search className="h-4 w-4 text-[var(--warn)]" />
-        </button>
-        <button type="button" className="icon-chip">
-          <SunMedium className="h-4 w-4 text-[var(--warn)]" />
-        </button>
-        <button type="button" className="icon-chip">
-          <Bell className="h-4 w-4 text-[var(--title)]" />
-        </button>
-      </div>
-    </div>
+    </header>
   );
 }
 
@@ -2107,31 +1644,6 @@ function AuditLogRow({
   );
 }
 
-function ActivityRow({
-  label,
-  detail,
-  category,
-  status,
-  tone,
-}: {
-  label: string;
-  detail: string;
-  category: string;
-  status: string;
-  tone: "neutral" | "warning" | "danger" | "success";
-}) {
-  return (
-    <div className="app-card flex items-start justify-between gap-4 p-4">
-      <div className="min-w-0">
-        <p className="accent-copy text-xs uppercase tracking-[0.18em]">{category}</p>
-        <p className="title-main mt-2 text-lg">{label}</p>
-        <p className="copy-soft mt-2 text-sm leading-6">{detail}</p>
-      </div>
-      <StatusPill value={status} tone={tone} />
-    </div>
-  );
-}
-
 function TaskRow({
   task,
   active,
@@ -2210,40 +1722,6 @@ function TaskEditor({
         onChange={(e) => onSave(task.id, { description: e.target.value })}
         className="field-input min-h-32"
       />
-    </div>
-  );
-}
-
-function NotePreviewCard({ note }: { note: Note }) {
-  return (
-    <div className="app-card p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="title-main text-xl">{note.title}</p>
-          <p className="mt-1 text-sm text-muted">Recently updated</p>
-        </div>
-        <button type="button" className="text-muted">
-          •••
-        </button>
-      </div>
-
-      <div className="mt-4 flex gap-2">
-        {note.tags.map((tag) => (
-          <span key={tag} className="tag-chip px-3 py-1 text-sm">
-            {tag}
-          </span>
-        ))}
-      </div>
-
-      <ul className="copy-soft mt-4 space-y-2 text-sm leading-7">
-        {note.content
-          .replace("Messy notes:", "")
-          .split(",")
-          .slice(0, 3)
-          .map((line) => (
-            <li key={line}>• {line.trim()}</li>
-          ))}
-      </ul>
     </div>
   );
 }
@@ -2429,70 +1907,6 @@ function CalendarEventEditor({
   );
 }
 
-function StatChip({
-  icon: Icon,
-  value,
-  label,
-  tone,
-}: {
-  icon: ComponentType<{ className?: string }>;
-  value: number;
-  label: string;
-  tone: "teal" | "rose" | "gold";
-}) {
-  return (
-    <div className="status-panel px-4 py-4">
-      <div className="flex items-center gap-3">
-        <Icon
-          className={clsx(
-            "h-5 w-5",
-            tone === "teal" && "text-[var(--accent)]",
-            tone === "rose" && "text-[var(--danger)]",
-            tone === "gold" && "text-[var(--warn)]",
-          )}
-        />
-        <p className="title-soft text-[2rem] leading-none">{value}</p>
-      </div>
-      <p className="copy-soft mt-2 text-sm">{label}</p>
-    </div>
-  );
-}
-
-function ConfirmationRow({
-  action,
-  onApprove,
-  onCancel,
-}: {
-  action: PendingAction;
-  onApprove: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="app-card p-3.5">
-      <div className="flex items-start gap-3">
-        <div className={clsx("mt-0.5 rounded-[0.8rem] px-3 py-2 text-sm", iconToneClass(action.type))}>{iconSymbol(action.type)}</div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="title-main text-base">{action.title}</p>
-              <p className="mt-1 text-sm text-muted">{action.description}</p>
-            </div>
-            <StatusPill value={action.risk} tone={action.risk === "high" ? "danger" : action.risk === "medium" ? "warning" : "success"} />
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button type="button" onClick={onApprove} className="small-action primary">
-              Approve
-            </button>
-            <button type="button" onClick={onCancel} className="small-action">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function EditableConfirmationCard({
   action,
   onChange,
@@ -2519,7 +1933,7 @@ function EditableConfirmationCard({
             <StatusPill value={action.risk} tone={action.risk === "high" ? "danger" : action.risk === "medium" ? "warning" : "success"} />
           </div>
 
-          {action.type === "create_reminder" || action.type === "create_followup_task" ? (
+          {action.type === "create_reminder" ? (
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <input value={String(action.payload.title ?? "")} onChange={(e) => onChange(action.id, { payload: { title: e.target.value } })} placeholder="Reminder title" className="field-input" />
               <input value={String(action.payload.when ?? "")} onChange={(e) => onChange(action.id, { payload: { when: e.target.value } })} placeholder="When" className="field-input" />
@@ -2565,11 +1979,6 @@ function EditableConfirmationCard({
             </p>
           ) : null}
 
-          {action.type === "place_call" ? (
-            <p className="copy-soft mt-3 text-sm leading-7">
-              Approving this runs the simulated call flow using the current call plan and saves the transcript plus summary to the Calls page.
-            </p>
-          ) : null}
 
           <div className="mt-4 flex gap-2">
             <button type="button" onClick={onApprove} className="small-action primary">
@@ -2647,9 +2056,6 @@ function iconToneClass(type: PendingAction["type"]) {
   if (type === "create_reminder") {
     return "bg-[#2b5a51] text-[#ccefe8]";
   }
-  if (type === "place_call") {
-    return "bg-[#5a4166] text-[#eadbff]";
-  }
   if (type === "create_calendar_event") {
     return "bg-[#3d4f76] text-[#dfe8ff]";
   }
@@ -2662,9 +2068,6 @@ function iconSymbol(type: PendingAction["type"]) {
   }
   if (type === "create_reminder") {
     return "□";
-  }
-  if (type === "place_call") {
-    return "◔";
   }
   if (type === "create_calendar_event") {
     return "◫";

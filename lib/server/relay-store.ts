@@ -11,7 +11,6 @@ import {
 } from "@/lib/server/google-workspace";
 import {
   initialCalendarEvents,
-  initialCalls,
   initialEmailDrafts,
   initialNotes,
   initialNotifications,
@@ -70,10 +69,9 @@ function createInitialState(): RelayStateSnapshot {
     calendarEvents: structuredClone(initialCalendarEvents),
     notifications: structuredClone(initialNotifications),
     drafts: structuredClone(initialEmailDrafts),
-    calls: structuredClone(initialCalls),
     pendingActions: structuredClone(initialPendingActions),
     assistantFeed: [
-      "I can prepare reminders, email drafts, note summaries, and simulated call plans. Important actions always wait for your approval.",
+      "I can prepare tasks, reminders, email drafts, note summaries, and calendar plans. Important actions always wait for your approval.",
     ],
     assistantRequests: [],
     actionLog: [
@@ -100,7 +98,6 @@ function createInitialState(): RelayStateSnapshot {
     integrations: {
       calendar: true,
       emailDrafts: true,
-      callAssistant: true,
       shareContextWithAi: true,
     },
     session: {
@@ -355,10 +352,6 @@ async function submitCommand(state: RelayStateSnapshot, rawInput: string, timezo
     state.drafts = [...plan.drafts, ...state.drafts];
   }
 
-  if (plan.calls?.length) {
-    state.calls = [...plan.calls, ...state.calls];
-  }
-
   if (plan.pendingActions?.length) {
     state.pendingActions = [...plan.pendingActions, ...state.pendingActions];
   }
@@ -465,42 +458,13 @@ async function approveAction(state: RelayStateSnapshot, actionId: string) {
     await syncDraftIfConfigured(state, draftId);
   }
 
-  if (action.type === "place_call") {
-    const callId = String(action.payload.callId);
-    state.calls = state.calls.map((call) =>
-      call.id === callId
-        ? {
-            ...call,
-            status: "simulated",
-            transcript:
-              `Relay: Hi, I'm Relay calling on behalf of ${state.profile.name}.\nGym: The court should be free after 7:30 PM.\nRelay: Thanks. Is there a closing time?\nGym: We close at 10 PM tonight.\nRelay: Perfect, I'll pass that along to ${state.profile.name}.`,
-            summary: "Court is free after 7:30 PM and the gym closes at 10 PM.",
-          }
-        : call,
-    );
-  }
-
-  if (action.type === "create_followup_task") {
-    state.reminders = [
-      {
-        id: crypto.randomUUID(),
-        title: String(action.payload.title ?? "Follow-up"),
-        when: String(action.payload.when ?? "Later"),
-        repeat: "none",
-        priority: "medium",
-        status: "active",
-      },
-      ...state.reminders,
-    ];
-  }
-
   state.pendingActions = state.pendingActions.map((item) =>
     item.id === action.id ? { ...item, status: "approved" } : item,
   );
   recordEvent(state, {
     title: "Pending action approved",
     detail: action.title,
-    category: action.type === "place_call" ? "call" : "approval",
+    category: "approval",
     impact: "success",
   });
 }
@@ -989,64 +953,6 @@ export async function applyRelayMutation(input: RelayMutationRequest): Promise<R
         }
       }
       break;
-    case "create_call_followups": {
-      const call = state.calls.find((item) => item.id === input.callId);
-      if (call) {
-        const newActions: PendingAction[] = [
-          {
-            id: crypto.randomUUID(),
-            type: "create_followup_task",
-            title: "Save follow-up reminder",
-            description: `Leave for ${call.contactName} at 6:45 PM`,
-            risk: "medium",
-            status: "pending",
-            payload: {
-              title: `Leave for ${call.contactName}`,
-              when: "Today, 6:45 PM",
-            },
-          },
-          {
-            id: crypto.randomUUID(),
-            type: "create_task",
-            title: "Create follow-up task",
-            description: "Text friends about basketball tonight",
-            risk: "medium",
-            status: "pending",
-            payload: {
-              title: "Text friends about basketball tonight",
-              due: "Today at 6:00 PM",
-              priority: "medium",
-              description: `Follow up after the ${call.contactName} call summary.`,
-            },
-          },
-          {
-            id: crypto.randomUUID(),
-            type: "create_calendar_event",
-            title: "Add basketball plan to calendar",
-            description: `${call.contactName} at 7:30 PM`,
-            risk: "medium",
-            status: "pending",
-            payload: {
-              title: "Basketball run",
-              detail: `Planned after the ${call.contactName} call result.`,
-              start: "Today at 7:30 PM",
-              end: "Today at 9:00 PM",
-              location: call.contactName,
-              tone: "teal",
-            },
-          },
-        ];
-        state.pendingActions = [...newActions, ...state.pendingActions];
-        appendFeed(state, `Prepared follow-up suggestions based on the ${call.contactName} call summary.`);
-        recordEvent(state, {
-          title: "Follow-up proposals created",
-          detail: `${call.contactName} • ${newActions.length} actions`,
-          category: "call",
-          impact: "info",
-        });
-      }
-      break;
-    }
     case "update_preferences":
       state.preferences = {
         ...state.preferences,
