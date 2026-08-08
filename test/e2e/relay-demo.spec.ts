@@ -1,6 +1,17 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+async function assertApiResponse(response: import("@playwright/test").Response, expectedStatus: number, label: string) {
+  if (response.status() === expectedStatus) return;
+  const body = (await response.text()).slice(0, 1_000);
+  const message = `${label} returned ${response.status()}: ${body}`;
+  if (process.env.CI) {
+    const escaped = message.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+    console.log(`::error file=test/e2e/relay-demo.spec.ts,line=18::${escaped}`);
+  }
+  throw new Error(message);
+}
+
 async function enterWorkspace(page: import("@playwright/test").Page) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
@@ -12,7 +23,15 @@ async function enterWorkspace(page: import("@playwright/test").Page) {
     await page.getByLabel("Name").fill("Relay Test User");
     await page.getByLabel("Email").fill(`relay-e2e-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`);
     await page.getByLabel("Password").fill("RelayTest1234");
+    const registration = page.waitForResponse(
+      (response) => response.url().endsWith("/api/auth/register") && response.request().method() === "POST",
+    );
+    const initialState = page.waitForResponse(
+      (response) => response.url().endsWith("/api/state") && response.request().method() === "GET",
+    );
     await page.getByRole("button", { name: "Create secure workspace" }).click();
+    await assertApiResponse(await registration, 201, "Registration");
+    await assertApiResponse(await initialState, 200, "Initial workspace load");
   }
   await expect(page).toHaveTitle("Relay");
   await expect(dashboard).toBeVisible({ timeout: 15_000 });
