@@ -106,7 +106,7 @@ pnpm typecheck
 pnpm lint
 pnpm test
 pnpm test:e2e
-pnpm ci
+pnpm run ci
 pnpm demo:check
 pnpm prisma:generate
 pnpm prisma:format

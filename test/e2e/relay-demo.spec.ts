@@ -28,10 +28,12 @@ async function enterWorkspace(page: import("@playwright/test").Page) {
     );
     const initialState = page.waitForResponse(
       (response) => response.url().endsWith("/api/state") && response.request().method() === "GET",
-    );
+    ).catch(() => null);
     await page.getByRole("button", { name: "Create secure workspace" }).click();
     await assertApiResponse(await registration, 201, "Registration");
-    await assertApiResponse(await initialState, 200, "Initial workspace load");
+    const initialStateResponse = await initialState;
+    if (!initialStateResponse) throw new Error("Initial workspace request did not complete.");
+    await assertApiResponse(initialStateResponse, 200, "Initial workspace load");
   }
   await expect(page).toHaveTitle("Relay");
   await expect(dashboard).toBeVisible({ timeout: 15_000 });
